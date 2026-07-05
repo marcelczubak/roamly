@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, MapPin, Minus, Plane, Plus, Users } from "lucide-react";
+import { ArrowRight, Calendar, MapPin, Minus, Plane, Plus, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Card,
   CardContent,
@@ -21,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { STYLE_ACCENTS } from "@/lib/accent-colors";
 import { IconToolbar } from "@/components/icon-toolbar";
 import { ORDERED_INTEREST_ITEMS } from "@/lib/icon-themes";
-import { todayString } from "@/lib/weather";
+import { maxStartDate, todayString } from "@/lib/weather";
 import {
   budgetRange,
   clampBudget,
@@ -63,6 +64,7 @@ export function TripForm({
 }: TripFormProps) {
   const [selectedCity, setSelectedCity] = useState<CitySelection | null>(null);
   const [travelers, setTravelers] = useState(2);
+  const [startDate, setStartDate] = useState(todayString);
   const [budget, setBudget] = useState(() =>
     budgetRange(2, TRIP_DAYS_DEFAULT).defaultBudget
   );
@@ -79,8 +81,9 @@ export function TripForm({
     }
   }, [prefillDestination, onDestinationChange]);
 
-  const startDate = todayString();
   const tripDays = days;
+  const minStartDate = todayString();
+  const maxStartDateForTrip = useMemo(() => maxStartDate(tripDays), [tripDays]);
   const { min: budgetMin, max: budgetMax, step: budgetStep } = useMemo(
     () => budgetRange(travelers, tripDays),
     [travelers, tripDays]
@@ -89,6 +92,14 @@ export function TripForm({
   useEffect(() => {
     setBudget((current) => clampBudget(current, travelers, tripDays));
   }, [travelers, tripDays]);
+
+  useEffect(() => {
+    setStartDate((current) => {
+      if (current < minStartDate) return minStartDate;
+      if (current > maxStartDateForTrip) return maxStartDateForTrip;
+      return current;
+    });
+  }, [minStartDate, maxStartDateForTrip]);
 
   const budgetPerPerson = perPerson(budget, travelers);
   const budgetPerPersonDay = perPerson(budget, travelers * tripDays);
@@ -206,42 +217,61 @@ export function TripForm({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="travelers">Travelers</Label>
-            <div className="flex h-10 max-w-xs items-center justify-between rounded-md border border-stone-200 bg-stone-50 px-2">
-              <button
-                type="button"
-                aria-label="Remove traveler"
-                disabled={travelers <= TRAVELERS_MIN}
-                onClick={() =>
-                  setTravelers((current) =>
-                    Math.max(TRAVELERS_MIN, current - 1)
-                  )
-                }
-                className="inline-flex size-8 items-center justify-center rounded-md text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Minus className="size-4" />
-              </button>
-              <div className="flex items-center gap-2 text-sm font-medium text-stone-900">
-                <Users className="size-4 text-stone-500" />
-                <span id="travelers">{travelers}</span>
-                <span className="font-normal text-stone-500">
-                  {travelers === 1 ? "person" : "people"}
-                </span>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="travelers">Travelers</Label>
+              <div className="flex h-10 items-center justify-between rounded-md border border-stone-200 bg-stone-50 px-2">
+                <button
+                  type="button"
+                  aria-label="Remove traveler"
+                  disabled={travelers <= TRAVELERS_MIN}
+                  onClick={() =>
+                    setTravelers((current) =>
+                      Math.max(TRAVELERS_MIN, current - 1)
+                    )
+                  }
+                  className="inline-flex size-8 items-center justify-center rounded-md text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Minus className="size-4" />
+                </button>
+                <div className="flex items-center gap-2 text-sm font-medium text-stone-900">
+                  <Users className="size-4 text-stone-500" />
+                  <span id="travelers">{travelers}</span>
+                  <span className="font-normal text-stone-500">
+                    {travelers === 1 ? "person" : "people"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  aria-label="Add traveler"
+                  disabled={travelers >= TRAVELERS_MAX}
+                  onClick={() =>
+                    setTravelers((current) =>
+                      Math.min(TRAVELERS_MAX, current + 1)
+                    )
+                  }
+                  className="inline-flex size-8 items-center justify-center rounded-md text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Plus className="size-4" />
+                </button>
               </div>
-              <button
-                type="button"
-                aria-label="Add traveler"
-                disabled={travelers >= TRAVELERS_MAX}
-                onClick={() =>
-                  setTravelers((current) =>
-                    Math.min(TRAVELERS_MAX, current + 1)
-                  )
-                }
-                className="inline-flex size-8 items-center justify-center rounded-md text-stone-600 transition-colors hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Plus className="size-4" />
-              </button>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="start-date">Start date</Label>
+              <div className="relative">
+                <Calendar className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-stone-500" />
+                <Input
+                  id="start-date"
+                  type="date"
+                  value={startDate}
+                  min={minStartDate}
+                  max={maxStartDateForTrip}
+                  disabled={isLoading}
+                  onChange={(event) => setStartDate(event.target.value)}
+                  className="h-10 border-stone-200 bg-stone-50 pl-9 text-sm text-stone-900 [&::-webkit-calendar-picker-indicator]:cursor-pointer"
+                />
+              </div>
             </div>
           </div>
 
