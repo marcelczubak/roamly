@@ -9,11 +9,21 @@ import {
   type DayWeather,
 } from "@/lib/weather";
 
+type AiProvider = "gemini" | "ollama";
+
+function getAiProvider(): AiProvider {
+  return process.env.AI_PROVIDER === "ollama" ? "ollama" : "gemini";
+}
+
+function getOllamaModel(): string {
+  return process.env.OLLAMA_MODEL ?? "qwen2.5:7b";
+}
+
 function getModel() {
   const apiKey = process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
-    throw new Error("Missing GEMINI_API_KEY");
+    return null;
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -118,6 +128,165 @@ CRITICAL RULES — every activity MUST follow these:
 14. Keep daily costs realistic for the ${style} travel style and group size.`;
 }
 
+const VALID_CATEGORIES = new Set([
+  "cafe",
+  "food",
+  "attraction",
+  "nature",
+  "museum",
+  "nightlife",
+  "shopping",
+  "transport",
+]);
+
+function normalizeCategory(category: unknown): string {
+  if (typeof category !== "string" || !category.trim()) {
+    return "attraction";
+  }
+
+  const lower = category.toLowerCase().trim();
+  if (VALID_CATEGORIES.has(lower)) {
+    return lower;
+  }
+
+  if (
+    lower.includes("cafe") ||
+    lower.includes("coffee") ||
+    lower.includes("bakery")
+  ) {
+    return "cafe";
+  }
+  if (
+    lower.includes("food") ||
+    lower.includes("restaurant") ||
+    lower.includes("dining") ||
+    lower.includes("breakfast") ||
+    lower.includes("lunch") ||
+    lower.includes("dinner")
+  ) {
+    return "food";
+  }
+  if (lower.includes("museum") || lower.includes("gallery") || lower.includes("history")) {
+    return "museum";
+  }
+  if (
+    lower.includes("nature") ||
+    lower.includes("park") ||
+    lower.includes("garden") ||
+    lower.includes("hike") ||
+    lower.includes("beach")
+  ) {
+    return "nature";
+  }
+  if (
+    lower.includes("night") ||
+    lower.includes("bar") ||
+    lower.includes("club") ||
+    lower.includes("pub")
+  ) {
+    return "nightlife";
+  }
+  if (lower.includes("shop") || lower.includes("market")) {
+    return "shopping";
+  }
+  if (
+    lower.includes("transport") ||
+    lower.includes("train") ||
+    lower.includes("bus") ||
+    lower.includes("taxi") ||
+    lower.includes("flight")
+  ) {
+    return "transport";
+  }
+
+  return "attraction";
+}
+
+function normalizeItinerary(parsed: Record<string, unknown>, destination: string) {
+  if (!parsed.days || !Array.isArray(parsed.days)) {
+    return parsed;
+  }
+
+  parsed.days.forEach((day: Record<string, unknown>) => {
+    if (!day.activities || !Array.isArray(day.activities)) {
+      return;
+    }
+
+    day.activities.forEach((act: Record<string, unknown>) => {
+      act.category = normalizeCategory(act.category);
+
+      const title = typeof act.title === "string" ? act.title : "Local activity";
+      if (!act.venueName) act.venueName = title;
+      if (!act.address) act.address = destination;
+      if (!act.neighborhood) act.neighborhood = "City center";
+      if (!act.imageQuery) act.imageQuery = title.split(" ").slice(0, 4).join(" ");
+      if (!act.photoQuery) act.photoQuery = `${act.venueName}, ${destination}`;
+      if (!act.reasoning) act.reasoning = "Recommended local experience.";
+      if (!act.localTip) act.localTip = "Check opening hours before visiting.";
+
+      const category = act.category as string;
+      if (
+        (category === "food" || category === "cafe") &&
+        (!Array.isArray(act.menuItems) || act.menuItems.length === 0)
+      ) {
+        act.menuItems = [{ name: "House special", price: 15, currency: "EUR" }];
+      } else if (!Array.isArray(act.menuItems)) {
+        act.menuItems = [];
+      }
+    });
+  });
+
+  return parsed;
+}
+
+async function generateWithGemini(prompt: string, destination: string) {
+  const model = getModel();
+  if (!model) {
+    throw new Error("Missing GEMINI_API_KEY");
+  }
+
+  const result = await model.generateContent(prompt);
+  const raw = result.response.text();
+  return normalizeItinerary(parseJsonResponse(raw), destination);
+}
+
+async function generateWithOllama(prompt: string, destination: string) {
+  const model = getOllamaModel();
+  const systemPrompt = `You are an expert travel planner. Return ONLY valid JSON. Do not wrap output in markdown code fences.
+
+STRICT RULES:
+- The "category" field MUST be exactly one of: "cafe", "food", "attraction", "nature", "museum", "nightlife", "shopping", "transport".
+- Never use values like "activity", "culture", "sightseeing", or "entertainment".
+- Every activity must include venueName, address, neighborhood, imageQuery, photoQuery, localTip, and reasoning.
+- For "food" and "cafe" activities, include menuItems with name, price, and currency.`;
+
+  const response = await fetch("http://localhost:11434/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: prompt },
+      ],
+      format: "json",
+      stream: false,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Ollama API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const content = String(data.message?.content ?? "")
+    .replace(/```json/g, "")
+    .replace(/```/g, "")
+    .trim();
+
+  return normalizeItinerary(parseJsonResponse(content), destination);
+}
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
@@ -154,27 +323,59 @@ export async function POST(req: Request) {
       );
     }
 
-    const model = getModel();
-
-    const result = await model.generateContent(
-      buildPrompt(
-        destination,
-        budget,
-        travelers,
-        days,
-        startDate,
-        style,
-        interests,
-        weather
-      )
+    const prompt = buildPrompt(
+      destination,
+      budget,
+      travelers,
+      days,
+      startDate,
+      style,
+      interests,
+      weather
     );
 
-    const raw = result.response.text();
-    const json = parseJsonResponse(raw);
-    const itinerary = ItinerarySchema.safeParse(json);
+    const provider = getAiProvider();
+    let jsonResult: Record<string, unknown> | undefined;
+
+    if (provider === "gemini") {
+      try {
+        jsonResult = await generateWithGemini(prompt, destination);
+      } catch (geminiError) {
+        console.warn("Gemini failed, falling back to Ollama:", geminiError);
+      }
+    }
+
+    if (!jsonResult) {
+      console.log(
+        `Using Ollama (${getOllamaModel()})${
+          provider === "ollama" ? " — AI_PROVIDER=ollama" : " as fallback"
+        }...`
+      );
+
+      try {
+        jsonResult = await generateWithOllama(prompt, destination);
+      } catch (ollamaError) {
+        console.error("Ollama failed:", ollamaError);
+        return NextResponse.json(
+          {
+            error:
+              provider === "ollama"
+                ? "Ollama failed to generate an itinerary. Is `ollama serve` running?"
+                : "Both Gemini and Ollama failed to generate an itinerary.",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    const itinerary = ItinerarySchema.safeParse(jsonResult);
 
     if (!itinerary.success) {
       console.error("Itinerary validation failed:", itinerary.error.flatten());
+      console.error(
+        "Raw JSON from AI:",
+        JSON.stringify(jsonResult).substring(0, 500)
+      );
       return NextResponse.json(
         { error: "Failed to generate a valid itinerary. Please try again." },
         { status: 502 }
