@@ -46,7 +46,7 @@ export async function POST(req: Request) {
   const body = await req.json();
   const { destination, budget, days, style, interests } = body;
 
-  const response = await openai.beta.chat.completions.parse({
+  const response = await openai.chat.completions.parse({
     model: "gpt-5.5",
     messages: [
       {
