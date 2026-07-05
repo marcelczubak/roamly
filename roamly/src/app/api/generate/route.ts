@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ItinerarySchema, TripRequestSchema } from "@/lib/schemas";
+import { geminiErrorResponse, getModel, parseJsonResponse } from "@/lib/gemini";
 import {
   fetchTripWeather,
   formatWeatherForPrompt,
@@ -76,7 +76,6 @@ Return ONLY valid JSON with this exact structure:
 {
   "summary": string,
   "budgetBreakdown": {
-    "accommodation": number,
     "food": number,
     "activities": number,
     "transport": number,
@@ -117,7 +116,7 @@ CRITICAL RULES — every activity MUST follow these:
 3. NEIGHBORHOODS: Name the exact district/quarter.
 4. MENU PRICES FOR FOOD/CAFE: For "food" and "cafe" activities, include menuItems with 2–4 real dishes/drinks and actual menu prices in local currency.
 5. ADMISSION & TICKET PRICES: For attractions/museums, state exact entry fees in description and match estimatedCost.
-6. IMAGE QUERY: imageQuery is a short 2–4 word photo search phrase; photoQuery is the exact venue name + city for maps/photos.
+6. IMAGE QUERIES: photoQuery must be the official venue name as used on Wikipedia (e.g. "National Museum of Ireland – Archaeology", "Trinity College Dublin"). imageQuery should describe the building exterior or street view (e.g. "museum exterior Dublin", "restaurant storefront").
 7. LOCAL TIPS: localTip must be a practical insider tip (best time, what to order, reservation advice, nearest metro stop).
 8. GROUP COSTS: All costs are for the ENTIRE GROUP of ${travelers}, not per person.
 9. Use lowercase for timeOfDay and category values exactly as listed.
@@ -393,32 +392,7 @@ export async function POST(req: Request) {
 
     console.error("Generate itinerary error:", message);
 
-    if (message.includes("Missing GEMINI_API_KEY")) {
-      return NextResponse.json(
-        { error: "Missing Gemini API key. Add GEMINI_API_KEY to .env.local." },
-        { status: 500 }
-      );
-    }
-
-    if (message.includes("429")) {
-      return NextResponse.json(
-        {
-          error: "Gemini rate limit reached. Wait a moment and try again.",
-        },
-        { status: 429 }
-      );
-    }
-
-    if (message.includes("API key not valid") || message.includes("401")) {
-      return NextResponse.json(
-        { error: "Invalid Gemini API key. Check GEMINI_API_KEY in .env.local." },
-        { status: 401 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Something went wrong while planning your trip." },
-      { status: 500 }
-    );
+    const { error: errorMessage, status } = geminiErrorResponse(message);
+    return NextResponse.json({ error: errorMessage }, { status });
   }
 }

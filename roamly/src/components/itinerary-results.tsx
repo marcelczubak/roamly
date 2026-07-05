@@ -8,8 +8,10 @@ import {
   Clock3,
   Euro,
   Lightbulb,
+  Loader2,
   MapPin,
   RefreshCw,
+  Trash2,
   Users,
   UtensilsCrossed,
 } from "lucide-react";
@@ -17,7 +19,7 @@ import { ActivityImage } from "@/components/activity-image";
 import { ActivityLeg } from "@/components/activity-leg";
 import { DayNavSidebar } from "@/components/day-nav-sidebar";
 import { CategoryBadge } from "@/components/icon-toolbar";
-import { formatDate, WeatherBadge, WeatherStrip } from "@/components/weather-preview";
+import { formatDate, DayWeatherHighlight, WeatherStrip } from "@/components/weather-preview";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,6 +30,12 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatEuro, perPerson } from "@/lib/budget";
+import { CATEGORY_ACCENTS } from "@/lib/accent-colors";
+import {
+  collectVenueNames,
+  deleteActivityFromItinerary,
+  replaceDayInItinerary,
+} from "@/lib/itinerary-utils";
 import { motionPage } from "@/lib/motion";
 import { getCategoryIconItem } from "@/lib/icon-themes";
 import { cn } from "@/lib/utils";
@@ -68,12 +76,22 @@ function GroupCost({
   amount,
   travelers,
   align = "right",
+  freeWhenZero = false,
 }: {
   amount: number;
   travelers: number;
   align?: "left" | "right";
+  freeWhenZero?: boolean;
 }) {
   const perPersonAmount = perPerson(amount, travelers);
+
+  if (freeWhenZero && amount === 0) {
+    return (
+      <div className={cn("shrink-0", align === "right" && "text-right")}>
+        <p className="text-sm font-semibold text-stone-700">Free</p>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("shrink-0", align === "right" && "text-right")}>
@@ -124,10 +142,12 @@ function ActivityCard({
   activity,
   destination,
   travelers,
+  onDelete,
 }: {
   activity: Activity;
   destination: string;
   travelers: number;
+  onDelete: () => void;
 }) {
   const [showReasoning, setShowReasoning] = useState(false);
   const category = getCategoryIconItem(activity.category);
@@ -135,12 +155,19 @@ function ActivityCard({
     activity.imageQuery || activity.photoQuery || `${destination} ${activity.title}`;
 
   return (
-    <div className="rounded-xl border border-stone-200 bg-white p-4">
+    <div
+      className={cn(
+        "relative rounded-xl border p-4 pb-11",
+        CATEGORY_ACCENTS[activity.category].card
+      )}
+    >
       <div className="flex gap-4">
         <ActivityImage
           query={imageQuery}
           category={activity.category}
           title={activity.title}
+          venueName={activity.venueName}
+          destination={destination}
         />
 
         <div className="min-w-0 flex-1">
@@ -164,7 +191,11 @@ function ActivityCard({
                 </span>
               </p>
             </div>
-            <GroupCost amount={activity.estimatedCost} travelers={travelers} />
+            <GroupCost
+              amount={activity.estimatedCost}
+              travelers={travelers}
+              freeWhenZero
+            />
           </div>
 
           <p className="mt-2 text-sm leading-relaxed text-stone-600">
@@ -202,6 +233,17 @@ function ActivityCard({
           ) : null}
         </div>
       </div>
+
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        onClick={onDelete}
+        aria-label={`Remove ${activity.title}`}
+        className="absolute bottom-2 left-2 size-8 text-stone-400 hover:bg-red-50 hover:text-red-600"
+      >
+        <Trash2 className="size-4" />
+      </Button>
     </div>
   );
 }
@@ -212,12 +254,18 @@ function DayCard({
   weather,
   travelers,
   id,
+  onDeleteActivity,
+  onRegenerate,
+  isRegenerating,
 }: {
   day: DayPlan;
   destination: string;
   weather?: DayWeather;
   travelers: number;
   id: string;
+  onDeleteActivity: (activityIndex: number) => void;
+  onRegenerate: () => void;
+  isRegenerating: boolean;
 }) {
   return (
     <Card
@@ -225,46 +273,79 @@ function DayCard({
       className="scroll-mt-20 overflow-hidden border-stone-200 bg-white shadow-sm"
     >
       <CardHeader className="border-b border-stone-100 bg-stone-50/80">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-2">
-            <div>
-              <CardTitle className="text-lg text-stone-900">
-                Day {day.day}
-                {weather ? (
-                  <span className="ml-2 text-sm font-normal text-stone-500">
-                    · {formatDate(weather.date)}
-                  </span>
-                ) : null}
-              </CardTitle>
-              <CardDescription className="text-sm text-stone-500">
-                {day.theme}
-              </CardDescription>
-            </div>
-            {weather ? <WeatherBadge weather={weather} compact /> : null}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+          <div className="min-w-0 flex-1 space-y-1">
+            <CardTitle className="text-lg text-stone-900">
+              Day {day.day}
+              {weather ? (
+                <span className="ml-2 text-sm font-normal text-stone-500">
+                  · {formatDate(weather.date)}
+                </span>
+              ) : null}
+            </CardTitle>
+            <CardDescription className="text-sm text-stone-500">
+              {day.theme}
+            </CardDescription>
           </div>
-          <div>
-            <p className="text-xs text-stone-500">Daily total</p>
-            <GroupCost amount={day.dailyTotal} travelers={travelers} />
+
+          {weather ? (
+            <div className="order-last flex w-full justify-center sm:order-0 sm:w-auto sm:flex-1 sm:justify-center">
+              <DayWeatherHighlight weather={weather} />
+            </div>
+          ) : null}
+
+          <div className="ml-auto flex flex-col items-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onRegenerate}
+              disabled={isRegenerating}
+              className="h-8 border-stone-200 bg-white text-stone-700 hover:bg-stone-50"
+            >
+              {isRegenerating ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="size-3.5" />
+              )}
+              Regenerate day
+            </Button>
+            <div>
+              <p className="text-xs text-stone-500">Daily total</p>
+              <GroupCost amount={day.dailyTotal} travelers={travelers} />
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
-        {day.activities.map((activity, index) => (
-          <Fragment key={`${day.day}-${index}`}>
-            {index > 0 ? (
-              <ActivityLeg
-                from={day.activities[index - 1]}
-                to={activity}
-                tripDestination={destination}
+        {isRegenerating ? (
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-10 text-sm text-stone-500">
+            <Loader2 className="size-4 animate-spin" />
+            Planning a fresh day {day.day}…
+          </div>
+        ) : day.activities.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-stone-200 bg-stone-50 px-4 py-8 text-center text-sm text-stone-500">
+            No activities left for this day. Regenerate to fill it again.
+          </div>
+        ) : (
+          day.activities.map((activity, index) => (
+            <Fragment key={`${day.day}-${activity.venueName}-${index}`}>
+              {index > 0 ? (
+                <ActivityLeg
+                  from={day.activities[index - 1]}
+                  to={activity}
+                  tripDestination={destination}
+                />
+              ) : null}
+              <ActivityCard
+                activity={activity}
+                destination={destination}
+                travelers={travelers}
+                onDelete={() => onDeleteActivity(index)}
               />
-            ) : null}
-            <ActivityCard
-              activity={activity}
-              destination={destination}
-              travelers={travelers}
-            />
-          </Fragment>
-        ))}
+            </Fragment>
+          ))
+        )}
       </CardContent>
     </Card>
   );
@@ -276,15 +357,22 @@ export function ItineraryResults({
   onBack,
 }: ItineraryResultsProps) {
   const { travelers } = trip;
+  const [itineraryState, setItineraryState] = useState(itinerary);
   const [activeDay, setActiveDay] = useState(itinerary.days[0]?.day ?? 1);
+  const [regeneratingDay, setRegeneratingDay] = useState<number | null>(null);
+  const [actionError, setActionError] = useState("");
+
+  useEffect(() => {
+    setItineraryState(itinerary);
+  }, [itinerary]);
 
   const weatherByDay = useMemo(() => {
     const map = new Map<number, DayWeather>();
-    for (const entry of itinerary.weather ?? []) {
+    for (const entry of itineraryState.weather ?? []) {
       map.set(entry.day, entry);
     }
     return map;
-  }, [itinerary.weather]);
+  }, [itineraryState.weather]);
 
   const scrollToDay = useCallback((day: number) => {
     const element = document.getElementById(`itinerary-day-${day}`);
@@ -295,7 +383,7 @@ export function ItineraryResults({
   }, []);
 
   useEffect(() => {
-    const dayElements = itinerary.days
+    const dayElements = itineraryState.days
       .map((day) => document.getElementById(`itinerary-day-${day.day}`))
       .filter((element): element is HTMLElement => element !== null);
 
@@ -326,16 +414,77 @@ export function ItineraryResults({
     }
 
     return () => observer.disconnect();
-  }, [itinerary.days]);
+  }, [itineraryState.days]);
 
-  const remainingBudget = trip.budget - itinerary.totalEstimatedCost;
+  function handleDeleteActivity(dayNumber: number, activityIndex: number) {
+    setActionError("");
+    setItineraryState((current) =>
+      deleteActivityFromItinerary(current, dayNumber, activityIndex)
+    );
+  }
+
+  async function handleRegenerateDay(dayNumber: number) {
+    const weather = weatherByDay.get(dayNumber);
+    if (!weather) {
+      setActionError("Weather data is missing for this day.");
+      return;
+    }
+
+    const currentDay = itineraryState.days.find((day) => day.day === dayNumber);
+    if (!currentDay) {
+      return;
+    }
+
+    setActionError("");
+    setRegeneratingDay(dayNumber);
+
+    try {
+      const response = await fetch("/api/regenerate-day", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trip,
+          dayNumber,
+          weather,
+          excludeVenues: collectVenueNames(itineraryState, dayNumber),
+          targetDailyBudget: currentDay.dailyTotal || undefined,
+          currentTheme: currentDay.theme,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error ?? "Failed to regenerate this day.");
+      }
+
+      setItineraryState((current) =>
+        replaceDayInItinerary(current, result.day)
+      );
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : "Failed to regenerate this day."
+      );
+    } finally {
+      setRegeneratingDay(null);
+    }
+  }
+
+  const remainingBudget = trip.budget - itineraryState.totalEstimatedCost;
   const remainingPerPerson = perPerson(remainingBudget, travelers);
+  const budgetUsedPercent =
+    trip.budget > 0
+      ? Math.round((itineraryState.totalEstimatedCost / trip.budget) * 100)
+      : 0;
+  const budgetSavedPercent = Math.max(0, 100 - budgetUsedPercent);
+  const budgetOverPercent = Math.max(0, budgetUsedPercent - 100);
   const breakdownItems = [
-    { label: "Accommodation", value: itinerary.budgetBreakdown.accommodation },
-    { label: "Food", value: itinerary.budgetBreakdown.food },
-    { label: "Activities", value: itinerary.budgetBreakdown.activities },
-    { label: "Transport", value: itinerary.budgetBreakdown.transport },
-    { label: "Buffer", value: itinerary.budgetBreakdown.buffer },
+    { label: "Food", value: itineraryState.budgetBreakdown.food },
+    { label: "Activities", value: itineraryState.budgetBreakdown.activities },
+    { label: "Transport", value: itineraryState.budgetBreakdown.transport },
+    { label: "Buffer", value: itineraryState.budgetBreakdown.buffer },
   ];
 
   return (
@@ -374,24 +523,27 @@ export function ItineraryResults({
               Your trip overview
             </CardTitle>
             <CardDescription className="text-sm leading-relaxed text-stone-600">
-              {itinerary.summary}
+              {itineraryState.summary}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {itinerary.weather?.length ? (
-              <WeatherStrip weather={itinerary.weather} />
+            {itineraryState.weather?.length ? (
+              <WeatherStrip weather={itineraryState.weather} />
             ) : null}
             <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
-                <p className="text-xs text-stone-500">Total estimated (group)</p>
-                <p className="mt-1 text-2xl font-semibold text-stone-900">
-                  {formatEuro(itinerary.totalEstimatedCost)}
+              <div className="rounded-xl border border-emerald-200/90 bg-emerald-50/55 p-4">
+                <p className="text-xs font-medium text-emerald-700/80">Total estimated (group)</p>
+                <p className="mt-1 text-2xl font-semibold text-emerald-950">
+                  {formatEuro(itineraryState.totalEstimatedCost)}
                 </p>
                 {travelers > 1 ? (
-                  <p className="mt-1 text-xs text-stone-500">
-                    {formatEuro(perPerson(itinerary.totalEstimatedCost, travelers))} per person
+                  <p className="mt-1 text-xs text-emerald-700/70">
+                    {formatEuro(perPerson(itineraryState.totalEstimatedCost, travelers))} per person
                   </p>
                 ) : null}
+                <p className="mt-1 text-xs font-medium text-emerald-700/80">
+                  {budgetUsedPercent}% of budget used
+                </p>
               </div>
               <div className="rounded-xl border border-stone-200 bg-stone-50 p-4">
                 <p className="text-xs text-stone-500">Your group budget</p>
@@ -424,6 +576,16 @@ export function ItineraryResults({
                     {formatEuro(remainingPerPerson)} per person
                   </p>
                 ) : null}
+                <p
+                  className={cn(
+                    "mt-1 text-xs font-medium",
+                    remainingBudget >= 0 ? "text-stone-600" : "text-red-600"
+                  )}
+                >
+                  {remainingBudget >= 0
+                    ? `${budgetSavedPercent}% saved`
+                    : `${budgetOverPercent}% over budget`}
+                </p>
               </div>
             </div>
           </CardContent>
@@ -452,11 +614,17 @@ export function ItineraryResults({
             <Separator />
             <div className="flex items-center justify-between gap-4 text-sm font-semibold">
               <span className="text-stone-700">Total</span>
-              <GroupCost amount={itinerary.totalEstimatedCost} travelers={travelers} />
+              <GroupCost amount={itineraryState.totalEstimatedCost} travelers={travelers} />
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {actionError ? (
+        <div className="rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700">
+          {actionError}
+        </div>
+      ) : null}
 
       <div id="itinerary-day-plan" className="space-y-4">
         <div className="flex items-center justify-between">
@@ -464,21 +632,21 @@ export function ItineraryResults({
             Day-by-day plan
           </h3>
           <p className="hidden text-sm text-stone-500 sm:block">
-            {itinerary.days.length} days planned · costs shown for group
+            {itineraryState.days.length} days planned · costs shown for group
             {travelers > 1 ? ` of ${travelers}` : ""}
           </p>
         </div>
 
         <div className="lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[15rem_minmax(0,1fr)]">
           <DayNavSidebar
-            days={itinerary.days}
+            days={itineraryState.days}
             weatherByDay={weatherByDay}
             activeDay={activeDay}
             onDaySelect={scrollToDay}
           />
 
           <div className="grid min-w-0 gap-5">
-            {itinerary.days.map((day) => (
+            {itineraryState.days.map((day) => (
               <DayCard
                 key={day.day}
                 id={`itinerary-day-${day.day}`}
@@ -486,21 +654,14 @@ export function ItineraryResults({
                 destination={trip.destination}
                 weather={weatherByDay.get(day.day)}
                 travelers={travelers}
+                isRegenerating={regeneratingDay === day.day}
+                onDeleteActivity={(activityIndex) =>
+                  handleDeleteActivity(day.day, activityIndex)
+                }
+                onRegenerate={() => handleRegenerateDay(day.day)}
               />
             ))}
           </div>
-        </div>
-      </div>
-
-      <div className="flex justify-center rounded-xl border border-dashed border-stone-200 bg-stone-50 px-6 py-5 text-center">
-        <div>
-          <p className="flex items-center justify-center gap-2 text-sm font-medium text-stone-700">
-            <RefreshCw className="size-4" />
-            Regenerate a single day
-          </p>
-          <p className="mt-1 text-xs text-stone-500">
-            Coming soon — swap out any day without rebuilding the full trip.
-          </p>
         </div>
       </div>
     </motion.div>

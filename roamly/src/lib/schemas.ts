@@ -54,7 +54,6 @@ export const DaySchema = z.object({
 export const ItinerarySchema = z.object({
   summary: z.string(),
   budgetBreakdown: z.object({
-    accommodation: z.number(),
     food: z.number(),
     activities: z.number(),
     transport: z.number(),

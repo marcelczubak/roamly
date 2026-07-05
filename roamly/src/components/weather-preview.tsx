@@ -35,6 +35,22 @@ function formatDate(dateStr: string) {
   });
 }
 
+export function DayWeatherHighlight({ weather }: { weather: DayWeather }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-sky-100/80 bg-sky-50/30 px-4 py-3">
+      <WeatherIcon code={weather.weatherCode} className="size-6 shrink-0 text-sky-600/90" />
+      <div className="min-w-0">
+        <p className="text-base font-semibold tabular-nums leading-none text-stone-800">
+          {weather.tempMin}–{weather.tempMax}°C
+        </p>
+        <p className="mt-1 text-sm text-stone-600">
+          {weather.description}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 export function WeatherBadge({
   weather,
   compact = false,

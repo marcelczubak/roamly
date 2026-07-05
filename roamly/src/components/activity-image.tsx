@@ -9,9 +9,17 @@ type ActivityImageProps = {
   query: string;
   category: Activity["category"];
   title: string;
+  venueName?: string;
+  destination?: string;
 };
 
-export function ActivityImage({ query, category, title }: ActivityImageProps) {
+export function ActivityImage({
+  query,
+  category,
+  title,
+  venueName,
+  destination,
+}: ActivityImageProps) {
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const categoryItem = getCategoryIconItem(category);
@@ -23,13 +31,16 @@ export function ActivityImage({ query, category, title }: ActivityImageProps) {
     setFailed(false);
 
     const params = new URLSearchParams({ q: query, category });
+    if (venueName) params.set("venue", venueName);
+    if (destination) params.set("destination", destination);
+
     fetch(`/api/place-image?${params}`)
       .then((response) => response.json())
-      .then((data: { url?: string }) => {
+      .then((data: { url?: string | null }) => {
         if (data.url) setSrc(data.url);
       })
       .catch(() => setFailed(true));
-  }, [query, category]);
+  }, [query, category, venueName, destination]);
 
   return (
     <div
