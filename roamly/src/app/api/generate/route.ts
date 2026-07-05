@@ -44,7 +44,31 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(itinerary);
-  } catch {
+  } catch (error) {
+    if (error instanceof OpenAI.APIError) {
+      if (error.status === 429) {
+        return NextResponse.json(
+          {
+            error:
+              "OpenAI quota exceeded. Add billing credits at platform.openai.com and try again.",
+          },
+          { status: 429 }
+        );
+      }
+
+      if (error.status === 401) {
+        return NextResponse.json(
+          { error: "Invalid OpenAI API key. Check OPENAI_API_KEY in .env.local." },
+          { status: 401 }
+        );
+      }
+
+      return NextResponse.json(
+        { error: error.message || "OpenAI request failed." },
+        { status: error.status ?? 502 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Something went wrong while planning your trip." },
       { status: 500 }
