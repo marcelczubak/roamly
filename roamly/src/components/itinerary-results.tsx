@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import {
@@ -25,6 +25,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { fetchPlaceImage } from "@/lib/place-image";
+import { ActivityLeg } from "@/components/activity-leg";
 import type { Activity, DayPlan, Itinerary, MenuItem, TripRequest } from "@/lib/schemas";
 
 type ItineraryResultsProps = {
@@ -229,7 +230,13 @@ function ActivityCard({ activity }: { activity: Activity }) {
   );
 }
 
-function DayCard({ day }: { day: DayPlan }) {
+function DayCard({
+  day,
+  tripDestination,
+}: {
+  day: DayPlan;
+  tripDestination: string;
+}) {
   return (
     <Card className="overflow-hidden border-border/60 bg-white/90 shadow-sm">
       <CardHeader className="border-b border-border/50 bg-muted/30">
@@ -248,7 +255,16 @@ function DayCard({ day }: { day: DayPlan }) {
       </CardHeader>
       <CardContent className="space-y-3 pt-4">
         {day.activities.map((activity, index) => (
-          <ActivityCard key={`${day.day}-${index}`} activity={activity} />
+          <Fragment key={`${day.day}-${index}`}>
+            {index > 0 ? (
+              <ActivityLeg
+                from={day.activities[index - 1]}
+                to={activity}
+                tripDestination={tripDestination}
+              />
+            ) : null}
+            <ActivityCard activity={activity} />
+          </Fragment>
         ))}
       </CardContent>
     </Card>
@@ -362,7 +378,7 @@ export function ItineraryResults({
 
         <div className="grid gap-5">
           {itinerary.days.map((day) => (
-            <DayCard key={day.day} day={day} />
+            <DayCard key={day.day} day={day} tripDestination={trip.destination} />
           ))}
         </div>
       </div>
