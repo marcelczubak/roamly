@@ -138,27 +138,6 @@ export function TripForm({
     });
   }
 
-  function handleQuickPlanCurrentCity() {
-    if (!currentCity) return;
-
-    const city = citySelectionFromName(currentCity, "current");
-
-    if (interests.length === 0) {
-      setError("Select at least one interest.");
-      return;
-    }
-
-    onSubmit({
-      destination: city.destination,
-      budget,
-      travelers,
-      days: tripDays,
-      startDate,
-      style,
-      interests,
-    });
-  }
-
   return (
     <Card id="trip-form" className="overflow-visible border-white/60 bg-white/80 shadow-sm backdrop-blur-md">
       <CardHeader>
@@ -185,7 +164,7 @@ export function TripForm({
               Pick a city from the suggestions — free text isn&apos;t allowed.
             </p>
             {currentCity ? (
-              <div className="flex flex-wrap gap-2 pt-1">
+              <div className="pt-1">
                 <button
                   type="button"
                   onClick={useCurrentCity}
@@ -193,14 +172,6 @@ export function TripForm({
                 >
                   <MapPin className="size-3" />
                   Use {currentCity}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleQuickPlanCurrentCity}
-                  disabled={isLoading}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-stone-300 bg-stone-800 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-stone-700 disabled:opacity-50"
-                >
-                  Plan trip in {currentCity}
                 </button>
               </div>
             ) : null}

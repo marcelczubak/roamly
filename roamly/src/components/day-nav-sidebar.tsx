@@ -2,10 +2,16 @@
 
 import { motion } from "framer-motion";
 import { CalendarDays } from "lucide-react";
-import { formatDate, WeatherBadge } from "@/components/weather-preview";
+import { formatDate, WeatherIcon } from "@/components/weather-preview";
 import { motionTransition } from "@/lib/motion";
+import {
+  getCategoryIconItem,
+  ICON_THEMES,
+  INTEREST_ICON_MAP,
+  type ThemedIconItem,
+} from "@/lib/icon-themes";
 import { cn } from "@/lib/utils";
-import type { DayPlan, DayWeather } from "@/lib/schemas";
+import type { Activity, DayPlan, DayWeather } from "@/lib/schemas";
 
 type DayNavSidebarProps = {
   days: DayPlan[];
@@ -13,6 +19,108 @@ type DayNavSidebarProps = {
   activeDay: number;
   onDaySelect: (day: number) => void;
 };
+
+const THEME_KEYWORDS: Array<[string, ThemedIconItem]> = [
+  ["café", INTEREST_ICON_MAP["Cafés"]],
+  ["cafe", INTEREST_ICON_MAP["Cafés"]],
+  ["coffee", INTEREST_ICON_MAP["Cafés"]],
+  ["food", INTEREST_ICON_MAP.Food],
+  ["culinary", INTEREST_ICON_MAP.Food],
+  ["dining", INTEREST_ICON_MAP.Food],
+  ["restaurant", INTEREST_ICON_MAP.Food],
+  ["nature", INTEREST_ICON_MAP.Nature],
+  ["park", INTEREST_ICON_MAP.Nature],
+  ["outdoor", INTEREST_ICON_MAP.Nature],
+  ["museum", INTEREST_ICON_MAP.Museums],
+  ["gallery", INTEREST_ICON_MAP.Museums],
+  ["culture", INTEREST_ICON_MAP.Museums],
+  ["nightlife", INTEREST_ICON_MAP.Nightlife],
+  ["bar", INTEREST_ICON_MAP.Nightlife],
+  ["shopping", INTEREST_ICON_MAP.Shopping],
+  ["market", INTEREST_ICON_MAP.Shopping],
+  ["history", INTEREST_ICON_MAP.History],
+  ["historic", INTEREST_ICON_MAP.History],
+  ["heritage", INTEREST_ICON_MAP.History],
+  ["art", INTEREST_ICON_MAP.Art],
+  ["adventure", INTEREST_ICON_MAP.Adventure],
+  ["hike", INTEREST_ICON_MAP.Adventure],
+];
+
+function matchThemeToInterestIcon(theme: string): ThemedIconItem {
+  const themeLower = theme.toLowerCase();
+
+  for (const [keyword, item] of THEME_KEYWORDS) {
+    if (themeLower.includes(keyword)) {
+      return item;
+    }
+  }
+
+  return getCategoryIconItem("attraction");
+}
+
+function getDayIconItems(day: DayPlan): ThemedIconItem[] {
+  const categoryCounts = new Map<Activity["category"], number>();
+
+  for (const activity of day.activities) {
+    if (activity.category === "transport") {
+      continue;
+    }
+
+    categoryCounts.set(
+      activity.category,
+      (categoryCounts.get(activity.category) ?? 0) + 1
+    );
+  }
+
+  if (categoryCounts.size > 0) {
+    return [...categoryCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 3)
+      .map(([category]) => getCategoryIconItem(category));
+  }
+
+  return [matchThemeToInterestIcon(day.theme)];
+}
+
+function DayInterestIcons({
+  items,
+  isActive,
+  compact = false,
+}: {
+  items: ThemedIconItem[];
+  isActive: boolean;
+  compact?: boolean;
+}) {
+  return (
+    <div className={cn("flex items-center", compact ? "gap-0.5" : "gap-1")}>
+      {items.map((item) => {
+        const Icon = item.icon;
+        const theme = ICON_THEMES[item.theme];
+
+        return (
+          <div
+            key={item.id}
+            className={cn(
+              "flex items-center justify-center rounded-md border",
+              compact ? "size-6" : "size-7",
+              isActive
+                ? "border-white/20 bg-white/10"
+                : cn(theme.bg, theme.border)
+            )}
+          >
+            <Icon
+              className={cn(
+                compact ? "size-3" : "size-3.5",
+                isActive ? "text-white" : theme.icon
+              )}
+              strokeWidth={2}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function DayNavButton({
   day,
@@ -29,6 +137,8 @@ function DayNavButton({
   onSelect: () => void;
   layout: "sidebar" | "rail";
 }) {
+  const dayIcons = getDayIconItems(day);
+
   if (layout === "rail") {
     return (
       <motion.button
@@ -37,13 +147,25 @@ function DayNavButton({
         whileTap={{ scale: 0.96 }}
         transition={motionTransition.interactive}
         className={cn(
-          "shrink-0 rounded-full px-4 py-2 text-sm font-medium transition-colors",
+          "flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors",
           isActive
             ? "bg-stone-800 text-white shadow-md"
             : "border border-stone-200 bg-white/90 text-stone-600 hover:border-stone-300 hover:bg-white hover:text-stone-900"
         )}
       >
-        Day {day.day}
+        {isActive && weather ? (
+          <>
+            <WeatherIcon code={weather.weatherCode} className="size-3.5 shrink-0" />
+            <span>
+              Day {day.day} · {weather.tempMax}°
+            </span>
+          </>
+        ) : (
+          <>
+            <DayInterestIcons items={dayIcons} isActive={false} compact />
+            <span>Day {day.day}</span>
+          </>
+        )}
       </motion.button>
     );
   }
@@ -91,16 +213,17 @@ function DayNavButton({
           >
             {day.theme}
           </p>
-          {weather ? (
-            isActive ? (
-              <p className="mt-1.5 text-xs text-stone-300">
+          {isActive && weather ? (
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-stone-300">
+              <WeatherIcon code={weather.weatherCode} className="size-3.5 shrink-0" />
+              <span>
                 {weather.tempMax}° / {weather.tempMin}° · {weather.description}
-              </p>
-            ) : (
-              <div className="mt-2 origin-left scale-90">
-                <WeatherBadge weather={weather} compact />
-              </div>
-            )
+              </span>
+            </div>
+          ) : !isActive ? (
+            <div className="mt-2">
+              <DayInterestIcons items={dayIcons} isActive={false} />
+            </div>
           ) : null}
         </div>
       </div>

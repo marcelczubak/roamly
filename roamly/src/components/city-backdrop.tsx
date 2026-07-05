@@ -64,14 +64,14 @@ export function CityBackdrop({
                   src={imageUrl}
                   alt=""
                   aria-hidden
-                  className="absolute inset-0 h-full w-full object-cover opacity-[0.42] blur-[72px] saturate-[1.85] contrast-[1.04]"
+                  className="absolute inset-0 h-full w-full object-cover opacity-[0.38] blur-[72px] saturate-[2.25] contrast-[1.08]"
                 />
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={imageUrl}
                   alt=""
                   aria-hidden
-                  className="absolute inset-0 h-full w-full scale-105 object-cover opacity-[0.58] blur-[26px] saturate-[1.7] contrast-[1.06]"
+                  className="absolute inset-0 h-full w-full scale-105 object-cover opacity-[0.5] blur-[26px] saturate-[2.1] contrast-[1.1]"
                 />
               </>
             ) : (
@@ -80,12 +80,11 @@ export function CityBackdrop({
                 src={imageUrl}
                 alt=""
                 aria-hidden
-                className="absolute inset-0 h-full w-full object-cover opacity-70 blur-[36px] saturate-[1.45] contrast-[1.02]"
+                className="absolute inset-0 h-full w-full object-cover opacity-[0.52] blur-[36px] saturate-[1.9] contrast-[1.06]"
               />
             )}
-            <div
-              className="absolute inset-0 bg-linear-to-b from-stone-50/5 via-transparent to-stone-50/5"
-            />
+            <div className="absolute inset-0 bg-stone-50/45" />
+            <div className="absolute inset-0 bg-linear-to-b from-stone-50/20 via-stone-50/35 to-stone-50/25" />
           </motion.div>
         ) : null}
       </AnimatePresence>

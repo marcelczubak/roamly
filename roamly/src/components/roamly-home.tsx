@@ -6,6 +6,7 @@ import { MapPin, Sparkles, Timer, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CityBackdrop } from "@/components/city-backdrop";
 import { FloatingLogo } from "@/components/floating-logo";
+import { LandingDecorationsLeft, LandingDecorationsMobile, LandingDecorationsRight } from "@/components/landing-decorations";
 import { GenerationLoader } from "@/components/generation-loader";
 import { ItineraryResults } from "@/components/itinerary-results";
 import { TripForm } from "@/components/trip-form";
@@ -143,7 +144,7 @@ export function RoamlyHome() {
             </div>
           ) : view === "loading" ? (
             <div key="loading" className="pt-32">
-              <GenerationLoader />
+              <GenerationLoader destination={trip?.destination} />
             </div>
           ) : (
             <motion.div
@@ -152,9 +153,9 @@ export function RoamlyHome() {
               animate={motionPage.animate}
               exit={motionPage.exit}
               transition={motionPage.transition}
-              className="grid min-h-[calc(100dvh-8rem)] items-start gap-10 pt-32 lg:grid-cols-[1.1fr_0.9fr]"
+              className="grid min-h-[calc(100dvh-8rem)] items-start gap-10 overflow-visible pt-32 lg:grid-cols-[1.2fr_0.8fr]"
             >
-              <section className="flex min-h-[calc(100dvh-8rem)] min-w-0 flex-col">
+              <section className="relative flex min-h-[calc(100dvh-8rem)] min-w-0 flex-col overflow-visible">
                 <AnimatePresence initial={false}>
                   {currentCity.status === "loading" && !locationBannerDismissed ? (
                     <motion.div
@@ -208,44 +209,54 @@ export function RoamlyHome() {
 
                 <div className="-mt-10 flex flex-1 flex-col justify-center gap-8">
                   <div className="space-y-4">
+                    <LandingDecorationsMobile />
+
                     <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-medium text-stone-500 backdrop-blur-sm">
                       <Sparkles className="size-3.5" />
                       AI-powered travel planning
                     </div>
-                    <h1 className="max-w-xl font-heading text-4xl font-semibold tracking-tight text-stone-900 md:text-5xl md:leading-[1.1]">
+                    <h1 className="font-heading text-4xl font-semibold tracking-tight text-stone-900 md:text-5xl md:leading-[1.1]">
                       Your next adventure, planned in seconds
                     </h1>
-                    <p className="max-w-lg text-base leading-relaxed text-stone-600 md:text-lg">
+                    <p className="max-w-2xl text-base leading-relaxed text-stone-600 md:text-lg">
                       Roamly turns your destination, budget, and interests into a
                       beautiful day-by-day itinerary — with restaurants,
                       attractions, costs, and AI reasoning for every pick.
                     </p>
                   </div>
 
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    {FEATURES.map((feature, index) => (
-                      <div
-                        key={feature.title}
-                        className={`rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm ${FEATURE_ACCENTS[index].card}`}
-                      >
-                        <div
-                          className={`mb-3 flex size-8 items-center justify-center rounded-lg ${FEATURE_ACCENTS[index].icon}`}
-                        >
-                          <feature.icon className="size-4" />
-                        </div>
-                        <h3 className="text-sm font-medium text-stone-900">
-                          {feature.title}
-                        </h3>
-                        <p className="mt-1 text-xs leading-relaxed text-stone-500">
-                          {feature.description}
-                        </p>
-                      </div>
-                    ))}
+                  <div className="flex w-full items-center gap-1 sm:gap-2 lg:gap-3">
+                    <LandingDecorationsLeft />
+
+                    <div className="min-w-0 flex-1 flex flex-col gap-3">
+                        {FEATURES.map((feature, index) => (
+                          <div
+                            key={feature.title}
+                            className={`flex items-start gap-3 rounded-2xl border border-white/60 bg-white/70 px-4 py-3 shadow-sm backdrop-blur-sm sm:gap-4 sm:px-5 sm:py-3.5 ${FEATURE_ACCENTS[index].card}`}
+                          >
+                            <div
+                              className={`flex size-8 shrink-0 items-center justify-center rounded-lg sm:size-9 ${FEATURE_ACCENTS[index].icon}`}
+                            >
+                              <feature.icon className="size-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <h3 className="text-sm font-medium text-stone-900">
+                                {feature.title}
+                              </h3>
+                              <p className="mt-0.5 text-xs leading-relaxed text-stone-500 sm:text-sm">
+                                {feature.description}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+
+                    <LandingDecorationsRight />
                   </div>
                 </div>
               </section>
 
-              <section className="flex min-h-[calc(100dvh-8rem)] min-w-0 flex-col justify-center">
+              <section className="relative z-10 flex min-h-[calc(100dvh-8rem)] min-w-0 flex-col justify-center">
                 {error ? (
                   <div className="mb-4 rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 backdrop-blur-sm">
                     {error}

@@ -12,7 +12,11 @@ const MESSAGES = [
   { text: "Adding the finishing touches...", icon: Sparkles },
 ];
 
-export function GenerationLoader() {
+type GenerationLoaderProps = {
+  destination?: string;
+};
+
+export function GenerationLoader({ destination }: GenerationLoaderProps) {
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
@@ -44,6 +48,11 @@ export function GenerationLoader() {
       <div className="text-center">
         <h2 className="font-heading text-2xl font-semibold tracking-tight text-stone-900">
           Building your itinerary
+          {destination ? (
+            <span className="block text-xl font-medium text-stone-700">
+              for {destination}
+            </span>
+          ) : null}
         </h2>
         <p className="mt-2 text-sm text-stone-500">
           Our AI is crafting a personalized plan just for you
