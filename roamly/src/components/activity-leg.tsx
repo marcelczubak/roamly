@@ -208,16 +208,81 @@ export function ActivityLeg({ from, to, tripDestination }: ActivityLegProps) {
             </div>
 
             {selectedOption?.embedUrl ? (
-              <div className="overflow-hidden rounded-lg border border-border/60">
-                <iframe
-                  title={`Route from ${from.venueName} to ${to.venueName}`}
-                  src={selectedOption.embedUrl}
-                  className="h-44 w-full border-0"
-                  loading="lazy"
-                  referrerPolicy="no-referrer-when-downgrade"
-                  allowFullScreen
-                />
+              <div className="space-y-2">
+                <div className="overflow-hidden rounded-lg border border-stone-200">
+                  <iframe
+                    title={`Route from ${from.venueName} to ${to.venueName}`}
+                    src={selectedOption.embedUrl}
+                    className="h-52 w-full border-0"
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    allowFullScreen
+                  />
+                </div>
+                <a
+                  href={selectedOption.mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800"
+                >
+                  Open full route in Google Maps
+                  <ExternalLink className="size-3" />
+                </a>
               </div>
+            ) : selectedOption?.mode === "taxi" &&
+              selectedOption.rideshareLinks &&
+              selectedOption.rideshareLinks.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-stone-600">
+                  Book a ride
+                </p>
+                <div
+                  className={cn(
+                    "grid gap-2",
+                    selectedOption.rideshareLinks.length > 2
+                      ? "sm:grid-cols-2"
+                      : "sm:grid-cols-2"
+                  )}
+                >
+                  {selectedOption.rideshareLinks.map((provider) => (
+                    <a
+                      key={provider.id}
+                      href={provider.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        backgroundColor: provider.color,
+                        color: provider.textColor ?? "#ffffff",
+                      }}
+                      className="flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-opacity hover:opacity-90"
+                    >
+                      {provider.name}
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  ))}
+                </div>
+                <a
+                  href={selectedOption.mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-stone-500 hover:text-stone-800"
+                >
+                  View driving route in Google Maps
+                  <ExternalLink className="size-3" />
+                </a>
+              </div>
+            ) : selectedOption ? (
+              <a
+                href={selectedOption.mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-center gap-2 rounded-lg border border-stone-200 bg-stone-50 px-4 py-3 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-100"
+              >
+                <MapPin className="size-4" />
+                View {MODE_CONFIG[selectedOption.mode].label.toLowerCase()} route
+                in Google Maps
+                <ExternalLink className="size-3.5" />
+              </a>
             ) : null}
 
             {selectedOption?.mode === "taxi" ? (

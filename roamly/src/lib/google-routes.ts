@@ -1,4 +1,5 @@
 import { buildLocationQueries, type LocationInput } from "@/lib/location-queries";
+import { buildRideshareLinks } from "@/lib/rideshare-links";
 import { estimateTaxiFare } from "@/lib/taxi-fare";
 import { estimateTransitFare } from "@/lib/transit-fare";
 import type { RouteComparison, RouteMode, RouteOption } from "@/lib/route-types";
@@ -65,21 +66,21 @@ function buildMapsDirUrl(origin: string, destination: string, mode: RouteMode) {
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
-function buildEmbedUrl(
-  apiKey: string,
-  origin: string,
-  destination: string,
-  mode: RouteMode
-) {
-  const travelMode =
-    mode === "taxi" ? "driving" : mode === "transit" ? "transit" : "walking";
+function buildEmbedUrl(origin: string, destination: string, mode: RouteMode) {
+  if (mode === "taxi") {
+    return null;
+  }
+
+  // Public Google Maps embed — no Maps Embed API key required
+  const dirflg = mode === "transit" ? "r" : "w";
   const params = new URLSearchParams({
-    key: apiKey,
-    origin,
-    destination,
-    mode: travelMode,
+    saddr: origin,
+    daddr: destination,
+    dirflg,
+    ie: "UTF8",
+    output: "embed",
   });
-  return `https://www.google.com/maps/embed/v1/directions?${params.toString()}`;
+  return `https://maps.google.com/maps?${params.toString()}`;
 }
 
 function formatCost(cost: number | null, currency: string) {
@@ -99,6 +100,37 @@ function formatCost(cost: number | null, currency: string) {
   } catch {
     return `${currency} ${cost}`;
   }
+}
+
+function toRouteOption(
+  mode: RouteMode,
+  origin: string,
+  destination: string,
+  apiKey: string,
+  tripDestination: string,
+  data: {
+    distanceMeters: number;
+    durationMinutes: number;
+    cost: number | null;
+    currency: string;
+    summary: string | null;
+  }
+): RouteOption {
+  return {
+    mode,
+    distanceMeters: data.distanceMeters,
+    durationMinutes: data.durationMinutes,
+    cost: data.cost,
+    currency: data.currency,
+    costLabel: formatCost(data.cost, data.currency),
+    summary: data.summary,
+    mapsUrl: buildMapsDirUrl(origin, destination, mode),
+    embedUrl: buildEmbedUrl(origin, destination, mode),
+    rideshareLinks:
+      mode === "taxi"
+        ? buildRideshareLinks(origin, destination, tripDestination)
+        : undefined,
+  };
 }
 
 async function computeRoute(
@@ -139,9 +171,14 @@ async function computeRoute(
 
   if (!response.ok) {
     const errorText = await response.text();
-    if (response.status === 403 || errorText.includes("PERMISSION_DENIED")) {
+    if (
+      response.status === 403 ||
+      errorText.includes("PERMISSION_DENIED") ||
+      errorText.includes("API key not authorized") ||
+      errorText.includes("API_KEY_INVALID")
+    ) {
       throw new Error(
-        "Routes API is not enabled. Enable Routes API in Google Cloud Console."
+        "Google Maps API key is restricted. Enable Routes API and set key restrictions to allow it — server-side calls need IP or no application restriction, not HTTP referrers only."
       );
     }
     return null;
@@ -161,32 +198,6 @@ async function computeRoute(
     durationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
     description: route.description ?? null,
     transitFare: parseTransitFare(route.travelAdvisory?.transitFare),
-  };
-}
-
-function toRouteOption(
-  mode: RouteMode,
-  origin: string,
-  destination: string,
-  apiKey: string,
-  data: {
-    distanceMeters: number;
-    durationMinutes: number;
-    cost: number | null;
-    currency: string;
-    summary: string | null;
-  }
-): RouteOption {
-  return {
-    mode,
-    distanceMeters: data.distanceMeters,
-    durationMinutes: data.durationMinutes,
-    cost: data.cost,
-    currency: data.currency,
-    costLabel: formatCost(data.cost, data.currency),
-    summary: data.summary,
-    mapsUrl: buildMapsDirUrl(origin, destination, mode),
-    embedUrl: buildEmbedUrl(apiKey, origin, destination, mode),
   };
 }
 
@@ -210,7 +221,7 @@ async function computeAllModes(
 
   if (walking) {
     options.push(
-      toRouteOption("walking", origin, destination, apiKey, {
+      toRouteOption("walking", origin, destination, apiKey, tripDestination, {
         distanceMeters: walking.distanceMeters,
         durationMinutes: walking.durationMinutes,
         cost: 0,
@@ -223,7 +234,7 @@ async function computeAllModes(
   if (transit) {
     const fare = transit.transitFare ?? estimateTransitFare(tripDestination);
     options.push(
-      toRouteOption("transit", origin, destination, apiKey, {
+      toRouteOption("transit", origin, destination, apiKey, tripDestination, {
         distanceMeters: transit.distanceMeters,
         durationMinutes: transit.durationMinutes,
         cost: fare.cost,
@@ -241,7 +252,7 @@ async function computeAllModes(
     );
 
     options.push(
-      toRouteOption("taxi", origin, destination, apiKey, {
+      toRouteOption("taxi", origin, destination, apiKey, tripDestination, {
         distanceMeters: driving.distanceMeters,
         durationMinutes: driving.durationMinutes,
         cost: taxi.cost,
@@ -270,9 +281,7 @@ async function resolveRoutePair(
 
   const uniquePairs = pairs.filter(
     ([origin, destination], index) =>
-      pairs.findIndex(
-        ([o, d]) => o === origin && d === destination
-      ) === index
+      pairs.findIndex(([o, d]) => o === origin && d === destination) === index
   );
 
   for (const [origin, destination] of uniquePairs.slice(0, 4)) {
