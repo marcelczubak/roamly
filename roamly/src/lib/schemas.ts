@@ -12,9 +12,18 @@ export const INTEREST_OPTIONS = [
   "Adventure",
 ] as const;
 
+export const MenuItemSchema = z.object({
+  name: z.string(),
+  price: z.number(),
+  currency: z.string(),
+});
+
 export const ActivitySchema = z.object({
   timeOfDay: z.enum(["morning", "afternoon", "evening"]),
   title: z.string(),
+  venueName: z.string(),
+  address: z.string(),
+  neighborhood: z.string(),
   description: z.string(),
   estimatedCost: z.number(),
   category: z.enum([
@@ -27,6 +36,9 @@ export const ActivitySchema = z.object({
     "transport",
   ]),
   reasoning: z.string(),
+  menuItems: z.array(MenuItemSchema).optional(),
+  photoQuery: z.string(),
+  localTip: z.string(),
 });
 
 export const DaySchema = z.object({
@@ -61,3 +73,4 @@ export type TripRequest = z.infer<typeof TripRequestSchema>;
 export type Itinerary = z.infer<typeof ItinerarySchema>;
 export type DayPlan = z.infer<typeof DaySchema>;
 export type Activity = z.infer<typeof ActivitySchema>;
+export type MenuItem = z.infer<typeof MenuItemSchema>;

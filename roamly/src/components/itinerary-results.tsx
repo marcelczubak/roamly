@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
   Lightbulb,
   MapPin,
   RefreshCw,
+  UtensilsCrossed,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +24,8 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
-import type { Activity, DayPlan, Itinerary, TripRequest } from "@/lib/schemas";
+import { fetchPlaceImage } from "@/lib/place-image";
+import type { Activity, DayPlan, Itinerary, MenuItem, TripRequest } from "@/lib/schemas";
 
 type ItineraryResultsProps = {
   itinerary: Itinerary;
@@ -54,56 +57,174 @@ function formatEuro(amount: number) {
   }).format(amount);
 }
 
-function ActivityCard({ activity }: { activity: Activity }) {
-  const [showReasoning, setShowReasoning] = useState(false);
+function formatPrice(amount: number, currency = "EUR") {
+  try {
+    return new Intl.NumberFormat("en", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: currency === "JPY" ? 0 : 2,
+    }).format(amount);
+  } catch {
+    return `${currency} ${amount}`;
+  }
+}
+
+function usePlaceImage(photoQuery: string) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadImage() {
+      setLoading(true);
+      try {
+        const url = await fetchPlaceImage(photoQuery);
+        if (!cancelled) {
+          setImageUrl(url);
+        }
+      } catch {
+        if (!cancelled) {
+          setImageUrl(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadImage();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [photoQuery]);
+
+  return { imageUrl, loading };
+}
+
+function MenuItemsList({ items }: { items: MenuItem[] }) {
+  if (items.length === 0) {
+    return null;
+  }
 
   return (
-    <div className="rounded-xl border border-border/60 bg-white p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge
-              variant="outline"
-              className={cn("capitalize", CATEGORY_COLORS[activity.category])}
-            >
-              {activity.category}
-            </Badge>
-            <span className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock3 className="size-3" />
-              {TIME_LABELS[activity.timeOfDay]}
+    <div className="mt-3 rounded-lg border border-orange-100 bg-orange-50/60 p-3">
+      <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-orange-800">
+        <UtensilsCrossed className="size-3.5" />
+        Menu highlights
+      </div>
+      <ul className="space-y-1.5">
+        {items.map((item) => (
+          <li
+            key={`${item.name}-${item.price}`}
+            className="flex items-center justify-between gap-3 text-sm"
+          >
+            <span className="text-foreground">{item.name}</span>
+            <span className="shrink-0 font-medium text-orange-700">
+              {formatPrice(item.price, item.currency)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ActivityCard({ activity }: { activity: Activity }) {
+  const [showReasoning, setShowReasoning] = useState(false);
+  const { imageUrl, loading } = usePlaceImage(activity.photoQuery);
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-border/60 bg-white">
+      <div className="grid sm:grid-cols-[180px_1fr]">
+        <div className="relative aspect-[4/3] bg-muted/40 sm:aspect-auto sm:min-h-[160px]">
+          {loading ? (
+            <div className="flex h-full min-h-[120px] items-center justify-center text-xs text-muted-foreground">
+              Loading photo…
+            </div>
+          ) : imageUrl ? (
+            <Image
+              src={imageUrl}
+              alt={activity.venueName}
+              fill
+              className="object-cover"
+              sizes="180px"
+            />
+          ) : (
+            <div className="flex h-full min-h-[120px] items-center justify-center px-3 text-center text-xs text-muted-foreground">
+              {activity.venueName}
+            </div>
+          )}
+        </div>
+
+        <div className="p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  variant="outline"
+                  className={cn("capitalize", CATEGORY_COLORS[activity.category])}
+                >
+                  {activity.category}
+                </Badge>
+                <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock3 className="size-3" />
+                  {TIME_LABELS[activity.timeOfDay]}
+                </span>
+              </div>
+              <h4 className="font-medium text-foreground">{activity.title}</h4>
+              <p className="text-sm font-medium text-primary/90">
+                {activity.venueName}
+              </p>
+              <p className="flex items-start gap-1 text-xs text-muted-foreground">
+                <MapPin className="mt-0.5 size-3 shrink-0" />
+                <span>
+                  {activity.address} · {activity.neighborhood}
+                </span>
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-medium text-primary">
+              {formatEuro(activity.estimatedCost)}
             </span>
           </div>
-          <h4 className="font-medium text-foreground">{activity.title}</h4>
+
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {activity.description}
+          </p>
+
+          {activity.menuItems && activity.menuItems.length > 0 ? (
+            <MenuItemsList items={activity.menuItems} />
+          ) : null}
+
+          <p className="mt-3 rounded-lg bg-muted/40 px-3 py-2 text-xs leading-relaxed text-muted-foreground">
+            <span className="font-medium text-foreground">Local tip: </span>
+            {activity.localTip}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => setShowReasoning((current) => !current)}
+            className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
+          >
+            <Lightbulb className="size-3.5" />
+            Why this recommendation?
+            <ChevronDown
+              className={cn(
+                "size-3.5 transition-transform",
+                showReasoning && "rotate-180"
+              )}
+            />
+          </button>
+
+          {showReasoning ? (
+            <p className="mt-2 rounded-lg bg-primary/5 px-3 py-2 text-sm leading-relaxed text-muted-foreground">
+              {activity.reasoning}
+            </p>
+          ) : null}
         </div>
-        <span className="shrink-0 text-sm font-medium text-primary">
-          {formatEuro(activity.estimatedCost)}
-        </span>
       </div>
-
-      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-        {activity.description}
-      </p>
-
-      <button
-        type="button"
-        onClick={() => setShowReasoning((current) => !current)}
-        className="mt-3 flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-      >
-        <Lightbulb className="size-3.5" />
-        Why this recommendation?
-        <ChevronDown
-          className={cn(
-            "size-3.5 transition-transform",
-            showReasoning && "rotate-180"
-          )}
-        />
-      </button>
-
-      {showReasoning ? (
-        <p className="mt-2 rounded-lg bg-primary/5 px-3 py-2 text-sm leading-relaxed text-muted-foreground">
-          {activity.reasoning}
-        </p>
-      ) : null}
     </div>
   );
 }
