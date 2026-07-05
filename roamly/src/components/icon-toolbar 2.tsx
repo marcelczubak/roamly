@@ -42,7 +42,7 @@ export function IconCircleButton({
       aria-label={label}
       aria-pressed={onClick ? selected : undefined}
       className={cn(
-        "relative flex shrink-0 items-center justify-center rounded-full border border-solid transition-all duration-700",
+        "relative flex shrink-0 items-center justify-center rounded-full border border-solid transition-all duration-200",
         BUTTON_SIZE,
         selected ? colors.borderSelected : colors.border,
         selected ? colors.bgSelected : colors.bg,

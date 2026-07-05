@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { ActivityImage } from "@/components/activity-image";
 import { ActivityLeg } from "@/components/activity-leg";
+import { DayNavSidebar } from "@/components/day-nav-sidebar";
 import { CategoryBadge } from "@/components/icon-toolbar";
 import { formatDate, WeatherBadge, WeatherStrip } from "@/components/weather-preview";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { formatEuro, perPerson } from "@/lib/budget";
+import { motionPage } from "@/lib/motion";
 import { getCategoryIconItem } from "@/lib/icon-themes";
 import { cn } from "@/lib/utils";
 import type {
@@ -187,7 +189,7 @@ function ActivityCard({
             Why this recommendation?
             <ChevronDown
               className={cn(
-                "size-3.5 transition-transform",
+                "size-3.5 transition-transform duration-700",
                 showReasoning && "rotate-180"
               )}
             />
@@ -209,14 +211,19 @@ function DayCard({
   destination,
   weather,
   travelers,
+  id,
 }: {
   day: DayPlan;
   destination: string;
   weather?: DayWeather;
   travelers: number;
+  id: string;
 }) {
   return (
-    <Card className="overflow-hidden border-stone-200 bg-white shadow-sm">
+    <Card
+      id={id}
+      className="scroll-mt-20 overflow-hidden border-stone-200 bg-white shadow-sm"
+    >
       <CardHeader className="border-b border-stone-100 bg-stone-50/80">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-2">
@@ -269,6 +276,58 @@ export function ItineraryResults({
   onBack,
 }: ItineraryResultsProps) {
   const { travelers } = trip;
+  const [activeDay, setActiveDay] = useState(itinerary.days[0]?.day ?? 1);
+
+  const weatherByDay = useMemo(() => {
+    const map = new Map<number, DayWeather>();
+    for (const entry of itinerary.weather ?? []) {
+      map.set(entry.day, entry);
+    }
+    return map;
+  }, [itinerary.weather]);
+
+  const scrollToDay = useCallback((day: number) => {
+    const element = document.getElementById(`itinerary-day-${day}`);
+    if (!element) return;
+
+    setActiveDay(day);
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  useEffect(() => {
+    const dayElements = itinerary.days
+      .map((day) => document.getElementById(`itinerary-day-${day.day}`))
+      .filter((element): element is HTMLElement => element !== null);
+
+    if (dayElements.length === 0) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+
+        if (visible.length === 0) return;
+
+        const id = visible[0]?.target.id;
+        const dayNumber = Number(id?.replace("itinerary-day-", ""));
+        if (!Number.isNaN(dayNumber)) {
+          setActiveDay(dayNumber);
+        }
+      },
+      {
+        rootMargin: "-20% 0px -55% 0px",
+        threshold: [0, 0.25, 0.5, 0.75, 1],
+      }
+    );
+
+    for (const element of dayElements) {
+      observer.observe(element);
+    }
+
+    return () => observer.disconnect();
+  }, [itinerary.days]);
+
   const remainingBudget = trip.budget - itinerary.totalEstimatedCost;
   const remainingPerPerson = perPerson(remainingBudget, travelers);
   const breakdownItems = [
@@ -281,9 +340,10 @@ export function ItineraryResults({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      initial={motionPage.initial}
+      animate={motionPage.animate}
+      exit={motionPage.exit}
+      transition={motionPage.transition}
       className="space-y-8"
     >
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -398,27 +458,37 @@ export function ItineraryResults({
         </Card>
       </div>
 
-      <div className="space-y-4">
+      <div id="itinerary-day-plan" className="space-y-4">
         <div className="flex items-center justify-between">
           <h3 className="font-heading text-xl font-semibold text-stone-900">
             Day-by-day plan
           </h3>
-          <p className="text-sm text-stone-500">
+          <p className="hidden text-sm text-stone-500 sm:block">
             {itinerary.days.length} days planned · costs shown for group
             {travelers > 1 ? ` of ${travelers}` : ""}
           </p>
         </div>
 
-        <div className="grid gap-5">
-          {itinerary.days.map((day) => (
-            <DayCard
-              key={day.day}
-              day={day}
-              destination={trip.destination}
-              weather={itinerary.weather?.find((w) => w.day === day.day)}
-              travelers={travelers}
-            />
-          ))}
+        <div className="lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[15rem_minmax(0,1fr)]">
+          <DayNavSidebar
+            days={itinerary.days}
+            weatherByDay={weatherByDay}
+            activeDay={activeDay}
+            onDaySelect={scrollToDay}
+          />
+
+          <div className="grid min-w-0 gap-5">
+            {itinerary.days.map((day) => (
+              <DayCard
+                key={day.day}
+                id={`itinerary-day-${day.day}`}
+                day={day}
+                destination={trip.destination}
+                weather={weatherByDay.get(day.day)}
+                travelers={travelers}
+              />
+            ))}
+          </div>
         </div>
       </div>
 

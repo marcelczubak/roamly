@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { motionTransition } from "@/lib/motion";
 
 type CityBackdropProps = {
   city: string | null;
@@ -53,38 +52,33 @@ export function CityBackdrop({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={motionTransition.backdrop}
+            transition={{ duration: 0.9 }}
             className="absolute inset-0"
           >
-            {/* Hero: two layers — soft colour base + lighter detail so the city reads through */}
-            {variant === "hero" ? (
-              <>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
-                  alt=""
-                  aria-hidden
-                  className="absolute inset-0 h-full w-full object-cover opacity-[0.42] blur-[72px] saturate-[1.85] contrast-[1.04]"
-                />
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
-                  alt=""
-                  aria-hidden
-                  className="absolute inset-0 h-full w-full scale-105 object-cover opacity-[0.58] blur-[26px] saturate-[1.7] contrast-[1.06]"
-                />
-              </>
-            ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={imageUrl}
-                alt=""
-                aria-hidden
-                className="absolute inset-0 h-full w-full object-cover opacity-70 blur-[36px] saturate-[1.45] contrast-[1.02]"
-              />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl}
+              alt=""
+              aria-hidden
+              className={
+                variant === "content"
+                  ? "absolute inset-0 h-full w-full object-cover opacity-70 blur-[36px] saturate-[1.65] contrast-[1.02]"
+                  : "absolute inset-0 h-full w-full object-cover opacity-[0.82] blur-[48px] saturate-[1.8] contrast-[1.04]"
+              }
+            />
             <div
-              className="absolute inset-0 bg-linear-to-b from-stone-50/5 via-transparent to-stone-50/5"
+              className={
+                variant === "content"
+                  ? "absolute inset-0 bg-stone-50/45"
+                  : "absolute inset-0 bg-stone-50/30"
+              }
+            />
+            <div
+              className={
+                variant === "content"
+                  ? "absolute inset-0 bg-linear-to-b from-stone-50/30 via-stone-50/20 to-stone-50/65"
+                  : "absolute inset-0 bg-linear-to-b from-stone-50/15 via-transparent to-stone-50/55"
+              }
             />
           </motion.div>
         ) : null}

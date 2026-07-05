@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { motionPage, motionTransition } from "@/lib/motion";
 import { Loader2, MapPin, Utensils, Compass, Sparkles } from "lucide-react";
 
 const MESSAGES = [
@@ -17,7 +18,7 @@ export function GenerationLoader() {
   useEffect(() => {
     const timer = setInterval(() => {
       setIndex((current) => (current + 1) % MESSAGES.length);
-    }, 2200);
+    }, 4800);
 
     return () => clearInterval(timer);
   }, []);
@@ -26,7 +27,13 @@ export function GenerationLoader() {
   const CurrentIcon = current.icon;
 
   return (
-    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8 px-6 py-16">
+    <motion.div
+      initial={motionPage.initial}
+      animate={motionPage.animate}
+      exit={motionPage.exit}
+      transition={motionPage.transition}
+      className="flex min-h-[60vh] flex-col items-center justify-center gap-8 px-6 py-16"
+    >
       <div className="relative">
         <div className="absolute inset-0 animate-pulse rounded-full bg-stone-200 blur-2xl" />
         <div className="relative flex size-20 items-center justify-center rounded-full bg-white ring-1 ring-stone-200">
@@ -49,13 +56,13 @@ export function GenerationLoader() {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.3 }}
+          transition={motionTransition.message}
           className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600"
         >
           <CurrentIcon className="size-4 text-stone-500" />
           {current.text}
         </motion.div>
       </AnimatePresence>
-    </div>
+    </motion.div>
   );
 }

@@ -10,21 +10,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  CityAutocomplete,
+  citySelectionFromName,
+  type CitySelection,
+} from "@/components/city-autocomplete";
 import { cn } from "@/lib/utils";
 import { STYLE_ACCENTS } from "@/lib/accent-colors";
 import { IconToolbar } from "@/components/icon-toolbar";
 import { ORDERED_INTEREST_ITEMS } from "@/lib/icon-themes";
-import { maxStartDate, todayString } from "@/lib/weather";
+import { todayString } from "@/lib/weather";
 import {
   budgetRange,
   clampBudget,
@@ -53,14 +50,9 @@ const STYLE_LABELS: Record<(typeof TRAVEL_STYLES)[number], string> = {
   luxury: "Luxury",
 };
 
-function defaultStartDate() {
-  const date = new Date();
-  date.setDate(date.getDate() + 7);
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+const TRIP_DAYS_MIN = 1;
+const TRIP_DAYS_MAX = 14;
+const TRIP_DAYS_DEFAULT = 5;
 
 export function TripForm({
   onSubmit,
@@ -69,32 +61,26 @@ export function TripForm({
   currentCity,
   prefillDestination,
 }: TripFormProps) {
-  const [destination, setDestination] = useState("");
+  const [selectedCity, setSelectedCity] = useState<CitySelection | null>(null);
   const [travelers, setTravelers] = useState(2);
   const [budget, setBudget] = useState(() =>
-    budgetRange(2, 5).defaultBudget
+    budgetRange(2, TRIP_DAYS_DEFAULT).defaultBudget
   );
-  const [days, setDays] = useState("5");
-  const [startDate, setStartDate] = useState(defaultStartDate);
+  const [days, setDays] = useState(TRIP_DAYS_DEFAULT);
   const [style, setStyle] = useState<(typeof TRAVEL_STYLES)[number]>("mid-range");
   const [interests, setInterests] = useState<string[]>(["Cafés", "Nature"]);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (prefillDestination) {
-      setDestination(prefillDestination);
-      onDestinationChange?.(prefillDestination);
+      const city = citySelectionFromName(prefillDestination, "prefill");
+      setSelectedCity(city);
+      onDestinationChange?.(city.destination);
     }
   }, [prefillDestination, onDestinationChange]);
 
-  useEffect(() => {
-    const latest = maxStartDate(Number(days));
-    if (startDate > latest) {
-      setStartDate(latest);
-    }
-  }, [days, startDate]);
-
-  const tripDays = Number(days);
+  const startDate = todayString();
+  const tripDays = days;
   const { min: budgetMin, max: budgetMax, step: budgetStep } = useMemo(
     () => budgetRange(travelers, tripDays),
     [travelers, tripDays]
@@ -115,11 +101,15 @@ export function TripForm({
     );
   }
 
+  function handleCityChange(city: CitySelection | null) {
+    setSelectedCity(city);
+    onDestinationChange?.(city?.destination ?? "");
+    if (city) setError("");
+  }
+
   function useCurrentCity() {
     if (currentCity) {
-      setDestination(currentCity);
-      onDestinationChange?.(currentCity);
-      setError("");
+      handleCityChange(citySelectionFromName(currentCity, "current"));
     }
   }
 
@@ -127,8 +117,8 @@ export function TripForm({
     event.preventDefault();
     setError("");
 
-    if (!destination.trim()) {
-      setError("Please enter a destination.");
+    if (!selectedCity) {
+      setError("Select a city from the dropdown list.");
       return;
     }
 
@@ -137,13 +127,8 @@ export function TripForm({
       return;
     }
 
-    if (startDate < todayString() || startDate > maxStartDate(Number(days))) {
-      setError("Pick a start date within the available forecast window.");
-      return;
-    }
-
     onSubmit({
-      destination: destination.trim(),
+      destination: selectedCity.destination,
       budget,
       travelers,
       days: tripDays,
@@ -156,18 +141,15 @@ export function TripForm({
   function handleQuickPlanCurrentCity() {
     if (!currentCity) return;
 
+    const city = citySelectionFromName(currentCity, "current");
+
     if (interests.length === 0) {
       setError("Select at least one interest.");
       return;
     }
 
-    if (startDate < todayString() || startDate > maxStartDate(Number(days))) {
-      setError("Pick a start date within the available forecast window.");
-      return;
-    }
-
     onSubmit({
-      destination: currentCity,
+      destination: city.destination,
       budget,
       travelers,
       days: tripDays,
@@ -193,16 +175,15 @@ export function TripForm({
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="destination">Destination</Label>
-            <Input
+            <CityAutocomplete
               id="destination"
-              placeholder="e.g. Tokyo, Lisbon, Barcelona"
-              value={destination}
-              onChange={(event) => {
-                setDestination(event.target.value);
-                onDestinationChange?.(event.target.value);
-              }}
-              className="h-10 border-stone-200 bg-stone-50 text-sm focus-visible:border-stone-400"
+              value={selectedCity}
+              onChange={handleCityChange}
+              disabled={isLoading}
             />
+            <p className="text-xs text-stone-500">
+              Pick a city from the suggestions — free text isn&apos;t allowed.
+            </p>
             {currentCity ? (
               <div className="flex flex-wrap gap-2 pt-1">
                 <button
@@ -225,39 +206,32 @@ export function TripForm({
             ) : null}
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="startDate">Start date</Label>
-              <Input
-                id="startDate"
-                type="date"
-                min={todayString()}
-                max={maxStartDate(Number(days))}
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="h-10 border-stone-200 bg-stone-50 text-sm focus-visible:border-stone-400"
-              />
+          <div className="space-y-4 rounded-xl border border-stone-200 bg-stone-50/80 p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <Label htmlFor="days" className="text-sm font-medium text-stone-800">
+                Trip length
+              </Label>
+              <p className="text-2xl font-semibold tabular-nums tracking-tight text-stone-900">
+                {days} {days === 1 ? "day" : "days"}
+              </p>
             </div>
-
-            <div className="space-y-2">
-              <Label>Trip length</Label>
-              <Select
-                value={days}
-                onValueChange={(value) => value && setDays(value)}
-              >
-                <SelectTrigger className="h-10 w-full border-stone-200 bg-stone-50 text-sm">
-                  <SelectValue placeholder="Days" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Array.from({ length: 14 }, (_, index) => index + 1).map(
-                    (day) => (
-                      <SelectItem key={day} value={String(day)}>
-                        {day} {day === 1 ? "day" : "days"}
-                      </SelectItem>
-                    )
-                  )}
-                </SelectContent>
-              </Select>
+            <Slider
+              id="days"
+              min={TRIP_DAYS_MIN}
+              max={TRIP_DAYS_MAX}
+              step={1}
+              value={[days]}
+              onValueChange={(value) => {
+                const next = Array.isArray(value) ? value[0] : value;
+                if (next !== undefined) {
+                  setDays(Math.min(TRIP_DAYS_MAX, Math.max(TRIP_DAYS_MIN, next)));
+                }
+              }}
+              className="py-1 [&_[data-slot=slider-track]]:h-2.5 [&_[data-slot=slider-track]]:rounded-full [&_[data-slot=slider-track]]:bg-stone-300 [&_[data-slot=slider-range]]:rounded-full [&_[data-slot=slider-range]]:bg-stone-800 [&_[data-slot=slider-thumb]]:size-5 [&_[data-slot=slider-thumb]]:border-2 [&_[data-slot=slider-thumb]]:border-stone-800 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:shadow-md"
+            />
+            <div className="flex justify-between text-sm font-medium tabular-nums text-stone-700">
+              <span>1 day</span>
+              <span>14 days</span>
             </div>
           </div>
 
@@ -300,13 +274,34 @@ export function TripForm({
             </div>
           </div>
 
-          {destination.trim() ? (
+          {selectedCity ? (
             <WeatherPreview
-              destination={destination}
+              destination={selectedCity.destination}
               startDate={startDate}
-              days={Number(days)}
+              days={days}
             />
           ) : null}
+
+          <div className="space-y-2">
+            <Label>Travel style</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {TRAVEL_STYLES.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  onClick={() => setStyle(option)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2.5 text-xs font-medium transition-all",
+                    style === option
+                      ? STYLE_ACCENTS[option].active
+                      : STYLE_ACCENTS[option].idle
+                  )}
+                >
+                  {STYLE_LABELS[option]}
+                </button>
+              ))}
+            </div>
+          </div>
 
           <div className="space-y-4 rounded-xl border border-stone-200 bg-stone-50/80 p-4">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -340,27 +335,6 @@ export function TripForm({
             <div className="flex justify-between text-sm font-medium tabular-nums text-stone-700">
               <span>{formatEuro(budgetMin)}</span>
               <span>{formatEuro(budgetMax)}</span>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Travel style</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {TRAVEL_STYLES.map((option) => (
-                <button
-                  key={option}
-                  type="button"
-                  onClick={() => setStyle(option)}
-                  className={cn(
-                    "rounded-lg border px-3 py-2.5 text-xs font-medium transition-all",
-                    style === option
-                      ? STYLE_ACCENTS[option].active
-                      : STYLE_ACCENTS[option].idle
-                  )}
-                >
-                  {STYLE_LABELS[option]}
-                </button>
-              ))}
             </div>
           </div>
 

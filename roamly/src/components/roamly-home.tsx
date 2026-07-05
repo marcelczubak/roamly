@@ -2,14 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Globe2, MapPin, Sparkles, Timer, Wallet } from "lucide-react";
+import { MapPin, Sparkles, Timer, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CityBackdrop } from "@/components/city-backdrop";
+import { FloatingLogo } from "@/components/floating-logo";
 import { GenerationLoader } from "@/components/generation-loader";
 import { ItineraryResults } from "@/components/itinerary-results";
 import { TripForm } from "@/components/trip-form";
 import { useCurrentCity } from "@/hooks/use-current-city";
 import { FEATURE_ACCENTS } from "@/lib/accent-colors";
+import { motionPage, motionTransition } from "@/lib/motion";
 import type { GenerateResponse, TripRequest } from "@/lib/schemas";
 
 type View = "form" | "loading" | "results";
@@ -41,6 +43,7 @@ export function RoamlyHome() {
     null
   );
   const [backdropCity, setBackdropCity] = useState<string | null>(null);
+  const [locationBannerDismissed, setLocationBannerDismissed] = useState(false);
   const currentCity = useCurrentCity();
 
   useEffect(() => {
@@ -100,11 +103,13 @@ export function RoamlyHome() {
     setItinerary(null);
     setTrip(null);
     setError("");
+    setLocationBannerDismissed(false);
   }
 
   function planCurrentCity() {
     if (currentCity.status !== "ready") return;
 
+    setLocationBannerDismissed(true);
     setPrefillDestination(currentCity.city);
     setBackdropCity(currentCity.city);
     document
@@ -118,129 +123,129 @@ export function RoamlyHome() {
       : backdropCity;
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-stone-50">
+    <div className="relative min-h-screen bg-stone-50">
       <CityBackdrop
         city={displayBackdropCity}
         variant={view === "form" ? "hero" : "content"}
       />
 
-      <header className="relative z-10 border-b border-stone-200/60 bg-white/70 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
-          <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-stone-800 text-white shadow-sm">
-              <Globe2 className="size-5" />
-            </div>
-            <div>
-              <p className="font-heading text-lg font-semibold leading-none text-stone-900">
-                Roamly
-              </p>
-              <p className="text-[11px] text-stone-500">AI travel planner</p>
-            </div>
-          </div>
-          {currentCity.status === "ready" ? (
-            <div className="hidden items-center gap-1.5 text-sm text-stone-500 sm:flex">
-              <MapPin className="size-3.5" />
-              {currentCity.city}
-              {currentCity.country ? `, ${currentCity.country}` : ""}
-            </div>
-          ) : (
-            <p className="hidden text-sm text-stone-500 sm:block">
-              Personalized itineraries in seconds
-            </p>
-          )}
-        </div>
-      </header>
+      <FloatingLogo />
 
-      <main className="relative z-10 mx-auto max-w-6xl px-6 py-10 md:py-16">
+      <main className="relative z-10 mx-auto max-w-6xl px-6 pb-10 md:pb-16">
         <AnimatePresence mode="wait">
           {view === "results" && itinerary && trip ? (
-            <ItineraryResults
-              key="results"
-              itinerary={itinerary}
-              trip={trip}
-              onBack={handleBack}
-            />
+            <div key="results" className="pt-32">
+              <ItineraryResults
+                itinerary={itinerary}
+                trip={trip}
+                onBack={handleBack}
+              />
+            </div>
           ) : view === "loading" ? (
-            <GenerationLoader key="loading" />
+            <div key="loading" className="pt-32">
+              <GenerationLoader />
+            </div>
           ) : (
             <motion.div
               key="form"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.35 }}
-              className="grid items-start gap-10 lg:grid-cols-[1.1fr_0.9fr]"
+              initial={motionPage.initial}
+              animate={motionPage.animate}
+              exit={motionPage.exit}
+              transition={motionPage.transition}
+              className="grid min-h-[calc(100dvh-8rem)] items-start gap-10 pt-32 lg:grid-cols-[1.1fr_0.9fr]"
             >
-              <section className="space-y-8 pt-4">
-                <div className="space-y-4">
-                  {currentCity.status === "loading" ? (
-                    <div className="h-8 w-48 animate-pulse rounded-full bg-stone-200/80" />
-                  ) : currentCity.status === "ready" ? (
-                    <div className="flex flex-col gap-3 rounded-xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex items-start gap-2.5">
-                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-stone-100">
-                          <MapPin className="size-4 text-stone-600" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-stone-900">
-                            You&apos;re in {currentCity.city}
-                            {currentCity.country
-                              ? `, ${currentCity.country}`
-                              : ""}
-                          </p>
-                          <p className="text-xs text-stone-500">
-                            Generate an itinerary for where you are now
-                          </p>
-                        </div>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={planCurrentCity}
-                        className="shrink-0 border-stone-300 bg-stone-800 text-white hover:bg-stone-700 hover:text-white"
-                      >
-                        Plan a trip here
-                      </Button>
-                    </div>
-                  ) : null}
-
-                  <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-medium text-stone-500 backdrop-blur-sm">
-                    <Sparkles className="size-3.5" />
-                    AI-powered travel planning
-                  </div>
-                  <h1 className="max-w-xl font-heading text-4xl font-semibold tracking-tight text-stone-900 md:text-5xl md:leading-[1.1]">
-                    Your next adventure, planned in seconds
-                  </h1>
-                  <p className="max-w-lg text-base leading-relaxed text-stone-600 md:text-lg">
-                    Roamly turns your destination, budget, and interests into a
-                    beautiful day-by-day itinerary — with restaurants,
-                    attractions, costs, and AI reasoning for every pick.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-3">
-                  {FEATURES.map((feature, index) => (
-                    <div
-                      key={feature.title}
-                      className={`rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm ${FEATURE_ACCENTS[index].card}`}
+              <section className="flex min-h-[calc(100dvh-8rem)] min-w-0 flex-col">
+                <AnimatePresence initial={false}>
+                  {currentCity.status === "loading" && !locationBannerDismissed ? (
+                    <motion.div
+                      key="location-loading"
+                      initial={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      animate={{ opacity: 1, height: "auto", marginBottom: 24 }}
+                      exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                      transition={motionTransition.interactive}
+                      className="overflow-hidden"
                     >
-                      <div
-                        className={`mb-3 flex size-8 items-center justify-center rounded-lg ${FEATURE_ACCENTS[index].icon}`}
-                      >
-                        <feature.icon className="size-4" />
+                      <div className="h-8 w-48 animate-pulse rounded-full bg-stone-200/80" />
+                    </motion.div>
+                  ) : currentCity.status === "ready" && !locationBannerDismissed ? (
+                    <motion.div
+                      key="location-banner"
+                      initial={{ opacity: 0, y: -8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -12, height: 0, marginBottom: 0 }}
+                      transition={motionTransition.interactive}
+                      className="mb-6 overflow-hidden"
+                    >
+                      <div className="flex flex-col gap-3 rounded-xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-start gap-2.5">
+                          <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-stone-100">
+                            <MapPin className="size-4 text-stone-600" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-stone-900">
+                              You&apos;re in {currentCity.city}
+                              {currentCity.country
+                                ? `, ${currentCity.country}`
+                                : ""}
+                            </p>
+                            <p className="text-xs text-stone-500">
+                              Generate an itinerary for where you are now
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={planCurrentCity}
+                          className="shrink-0 border-stone-300 bg-stone-800 text-white hover:bg-stone-700 hover:text-white"
+                        >
+                          Plan trip here
+                        </Button>
                       </div>
-                      <h3 className="text-sm font-medium text-stone-900">
-                        {feature.title}
-                      </h3>
-                      <p className="mt-1 text-xs leading-relaxed text-stone-500">
-                        {feature.description}
-                      </p>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+
+                <div className="-mt-10 flex flex-1 flex-col justify-center gap-8">
+                  <div className="space-y-4">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-medium text-stone-500 backdrop-blur-sm">
+                      <Sparkles className="size-3.5" />
+                      AI-powered travel planning
                     </div>
-                  ))}
+                    <h1 className="max-w-xl font-heading text-4xl font-semibold tracking-tight text-stone-900 md:text-5xl md:leading-[1.1]">
+                      Your next adventure, planned in seconds
+                    </h1>
+                    <p className="max-w-lg text-base leading-relaxed text-stone-600 md:text-lg">
+                      Roamly turns your destination, budget, and interests into a
+                      beautiful day-by-day itinerary — with restaurants,
+                      attractions, costs, and AI reasoning for every pick.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    {FEATURES.map((feature, index) => (
+                      <div
+                        key={feature.title}
+                        className={`rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm ${FEATURE_ACCENTS[index].card}`}
+                      >
+                        <div
+                          className={`mb-3 flex size-8 items-center justify-center rounded-lg ${FEATURE_ACCENTS[index].icon}`}
+                        >
+                          <feature.icon className="size-4" />
+                        </div>
+                        <h3 className="text-sm font-medium text-stone-900">
+                          {feature.title}
+                        </h3>
+                        <p className="mt-1 text-xs leading-relaxed text-stone-500">
+                          {feature.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </section>
 
-              <section>
+              <section className="flex min-h-[calc(100dvh-8rem)] min-w-0 flex-col justify-center">
                 {error ? (
                   <div className="mb-4 rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 backdrop-blur-sm">
                     {error}
