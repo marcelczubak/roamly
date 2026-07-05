@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ItinerarySchema, TripRequestSchema } from "@/lib/schemas";
+import {
+  fetchTripWeather,
+  formatWeatherForPrompt,
+  maxStartDate,
+  todayString,
+  type DayWeather,
+} from "@/lib/weather";
 
 function getModel() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -27,14 +34,33 @@ function parseJsonResponse(raw: string) {
 function buildPrompt(
   destination: string,
   budget: number,
+  travelers: number,
   days: number,
+  startDate: string,
   style: string,
-  interests: string[]
+  interests: string[],
+  weather: DayWeather[]
 ) {
+  const weatherBlock = formatWeatherForPrompt(weather);
+  const perPersonBudget = Math.round(budget / travelers);
+
   return `You are a hyper-specific local travel expert for ${destination}. Use Google Search to verify real venues, current admission prices, and menu prices before recommending them.
 
-Create a realistic ${days}-day itinerary for ${destination} with a ${style} travel style and a total budget of €${budget}.
-The traveler is interested in: ${interests.join(", ")}.
+Create a realistic ${days}-day itinerary for ${destination} from ${startDate} with a ${style} travel style for a group of ${travelers} ${travelers === 1 ? "person" : "people"}.
+
+Total group budget: €${budget} (about €${perPersonBudget} per person for the whole trip).
+
+The group is interested in: ${interests.join(", ")}.
+
+Weather forecast for the trip:
+${weatherBlock}
+
+Tailor each day's activities to the weather:
+- Rainy or high precipitation days: prioritize museums, covered markets, cafés, and indoor attractions.
+- Clear or sunny days: prioritize parks, walking tours, outdoor viewpoints, and nature.
+- Cold days: favor cozy restaurants, indoor culture, shorter outdoor segments.
+- Hot days: schedule outdoor activities in the morning/evening, shade and indoor midday breaks.
+- Mention weather suitability briefly in activity reasoning where relevant.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -59,7 +85,8 @@ Return ONLY valid JSON with this exact structure:
           "neighborhood": string,
           "description": string,
           "estimatedCost": number,
-          "category": "food" | "attraction" | "nature" | "museum" | "nightlife" | "shopping" | "transport",
+          "category": "cafe" | "food" | "attraction" | "nature" | "museum" | "nightlife" | "shopping" | "transport",
+          "imageQuery": string,
           "reasoning": string,
           "menuItems": [
             { "name": string, "price": number, "currency": string }
@@ -75,19 +102,20 @@ Return ONLY valid JSON with this exact structure:
 }
 
 CRITICAL RULES — every activity MUST follow these:
-1. REAL PLACES ONLY: Use verified business/venue names (e.g. "Tsukiji Outer Market", "Musée d'Orsay", "Dishoom King's Cross") — never "a local café" or "nearby restaurant".
-2. FULL ADDRESSES: Include street address with postal code where possible (e.g. "4 Rue de la Paix, 75002 Paris, France").
-3. NEIGHBORHOODS: Name the exact district/quarter (e.g. "Shibuya", "Le Marais", "Gràcia").
-4. MENU PRICES FOR FOOD: For every "food" activity, include menuItems with 2–4 real dishes/drinks and their actual menu prices. Use the venue's local currency in the currency field (e.g. "JPY", "EUR", "GBP"). Search for their menu online when possible.
-5. ADMISSION & TICKET PRICES: For attractions/museums, state the exact entry fee in description and match estimatedCost (search current prices).
-6. PHOTO QUERY: photoQuery must be the exact venue name + city (e.g. "Senso-ji Temple Asakusa Tokyo") for image lookup.
-7. LOCAL TIPS: localTip must be a practical insider tip (best time to visit, what to order, reservation advice, nearest metro stop + line).
-8. DESCRIPTIONS: Write vivid, specific descriptions mentioning what to see/order/do — not generic travel prose.
+1. REAL PLACES ONLY: Use verified business/venue names — never "a local café" or "nearby restaurant".
+2. FULL ADDRESSES: Include street address with postal code where possible.
+3. NEIGHBORHOODS: Name the exact district/quarter.
+4. MENU PRICES FOR FOOD/CAFE: For "food" and "cafe" activities, include menuItems with 2–4 real dishes/drinks and actual menu prices in local currency.
+5. ADMISSION & TICKET PRICES: For attractions/museums, state exact entry fees in description and match estimatedCost.
+6. IMAGE QUERY: imageQuery is a short 2–4 word photo search phrase; photoQuery is the exact venue name + city for maps/photos.
+7. LOCAL TIPS: localTip must be a practical insider tip (best time, what to order, reservation advice, nearest metro stop).
+8. GROUP COSTS: All costs are for the ENTIRE GROUP of ${travelers}, not per person.
 9. Use lowercase for timeOfDay and category values exactly as listed.
-10. Include morning, afternoon, and evening activities for each day.
-11. menuItems is required for "food" category, omit or use empty array for other categories.
-12. totalEstimatedCost should be close to but not exceed €${budget}.
-13. Keep daily costs realistic for the ${style} travel style.`;
+10. Use category "cafe" for coffee shops; "food" for restaurants and sit-down meals.
+11. Include morning, afternoon, and evening activities for each day.
+12. menuItems required for "food" and "cafe", omit or empty array for other categories.
+13. totalEstimatedCost should be close to but not exceed €${budget}.
+14. Keep daily costs realistic for the ${style} travel style and group size.`;
 }
 
 export async function POST(req: Request) {
@@ -102,11 +130,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const { destination, budget, days, style, interests } = parsed.data;
+    const { destination, budget, travelers, days, startDate, style, interests } =
+      parsed.data;
+
+    const today = todayString();
+    const latestStart = maxStartDate(days);
+
+    if (startDate < today || startDate > latestStart) {
+      return NextResponse.json(
+        {
+          error: `Trip must start between ${today} and ${latestStart} (weather forecast limit).`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const weather = await fetchTripWeather(destination, startDate, days);
+
+    if (!weather) {
+      return NextResponse.json(
+        { error: "Could not fetch weather for this destination." },
+        { status: 404 }
+      );
+    }
+
     const model = getModel();
 
     const result = await model.generateContent(
-      buildPrompt(destination, budget, days, style, interests)
+      buildPrompt(
+        destination,
+        budget,
+        travelers,
+        days,
+        startDate,
+        style,
+        interests,
+        weather
+      )
     );
 
     const raw = result.response.text();
@@ -121,7 +181,11 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json(itinerary.data);
+    return NextResponse.json({
+      ...itinerary.data,
+      startDate,
+      weather,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Something went wrong.";
@@ -138,8 +202,7 @@ export async function POST(req: Request) {
     if (message.includes("429")) {
       return NextResponse.json(
         {
-          error:
-            "Gemini rate limit reached. Wait a moment and try again.",
+          error: "Gemini rate limit reached. Wait a moment and try again.",
         },
         { status: 429 }
       );

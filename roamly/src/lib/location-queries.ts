@@ -2,7 +2,7 @@ import type { Activity } from "@/lib/schemas";
 
 export type LocationInput = Pick<
   Activity,
-  "venueName" | "address" | "neighborhood" | "photoQuery"
+  "venueName" | "address" | "neighborhood" | "photoQuery" | "imageQuery"
 >;
 
 export function buildLocationQueries(
@@ -13,9 +13,11 @@ export function buildLocationQueries(
     [activity.venueName, activity.address, tripDestination].join(", "),
     [activity.venueName, activity.neighborhood, tripDestination].join(", "),
     [activity.photoQuery, tripDestination].join(", "),
+    [activity.imageQuery, tripDestination].join(", "),
     [activity.address, tripDestination].join(", "),
     [activity.venueName, tripDestination].join(", "),
     activity.photoQuery,
+    activity.imageQuery,
     activity.address,
     activity.venueName,
   ];

@@ -22,22 +22,23 @@ export function GenerationLoader() {
     return () => clearInterval(timer);
   }, []);
 
-  const CurrentIcon = MESSAGES[index].icon;
+  const current = MESSAGES[index];
+  const CurrentIcon = current.icon;
 
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-8 px-6 py-16">
       <div className="relative">
-        <div className="absolute inset-0 animate-pulse rounded-full bg-primary/20 blur-2xl" />
-        <div className="relative flex size-20 items-center justify-center rounded-full bg-primary/10 ring-1 ring-primary/20">
-          <Loader2 className="size-9 animate-spin text-primary" />
+        <div className="absolute inset-0 animate-pulse rounded-full bg-stone-200 blur-2xl" />
+        <div className="relative flex size-20 items-center justify-center rounded-full bg-white ring-1 ring-stone-200">
+          <Loader2 className="size-9 animate-spin text-stone-700" />
         </div>
       </div>
 
       <div className="text-center">
-        <h2 className="font-heading text-2xl font-semibold tracking-tight">
+        <h2 className="font-heading text-2xl font-semibold tracking-tight text-stone-900">
           Building your itinerary
         </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <p className="mt-2 text-sm text-stone-500">
           Our AI is crafting a personalized plan just for you
         </p>
       </div>
@@ -49,10 +50,10 @@ export function GenerationLoader() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.3 }}
-          className="flex items-center gap-2 rounded-full bg-muted/60 px-4 py-2 text-sm text-muted-foreground"
+          className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-4 py-2 text-sm text-stone-600"
         >
-          <CurrentIcon className="size-4 text-primary" />
-          {MESSAGES[index].text}
+          <CurrentIcon className="size-4 text-stone-500" />
+          {current.text}
         </motion.div>
       </AnimatePresence>
     </div>

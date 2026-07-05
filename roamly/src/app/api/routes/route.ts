@@ -7,6 +7,7 @@ const LocationSchema = z.object({
   address: z.string().min(1),
   neighborhood: z.string().min(1),
   photoQuery: z.string().min(1),
+  imageQuery: z.string().min(1),
 });
 
 const RouteRequestSchema = z.object({
