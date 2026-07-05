@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ItinerarySchema, TripRequestSchema } from "@/lib/schemas";
+import {
+  fetchTripWeather,
+  formatWeatherForPrompt,
+  maxStartDate,
+  todayString,
+  type DayWeather,
+} from "@/lib/weather";
 
 function getModel() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -22,13 +29,31 @@ function getModel() {
 function buildPrompt(
   destination: string,
   budget: number,
+  travelers: number,
   days: number,
+  startDate: string,
   style: string,
-  interests: string[]
+  interests: string[],
+  weather: DayWeather[]
 ) {
-  return `You are an expert travel planner. Create a realistic ${days}-day itinerary for ${destination} with a ${style} travel style and a total budget of €${budget}.
+  const weatherBlock = formatWeatherForPrompt(weather);
+  const perPersonBudget = Math.round(budget / travelers);
 
-The traveler is interested in: ${interests.join(", ")}.
+  return `You are an expert travel planner. Create a realistic ${days}-day itinerary for ${destination} from ${startDate} with a ${style} travel style for a group of ${travelers} ${travelers === 1 ? "person" : "people"}.
+
+Total group budget: €${budget} (about €${perPersonBudget} per person for the whole trip).
+
+The group is interested in: ${interests.join(", ")}.
+
+Weather forecast for the trip:
+${weatherBlock}
+
+Tailor each day's activities to the weather:
+- Rainy or high precipitation days: prioritize museums, covered markets, cafés, and indoor attractions.
+- Clear or sunny days: prioritize parks, walking tours, outdoor viewpoints, and nature.
+- Cold days: favor cozy restaurants, indoor culture, shorter outdoor segments.
+- Hot days: schedule outdoor activities in the morning/evening, shade and indoor midday breaks.
+- Mention weather suitability briefly in activity reasoning where relevant.
 
 Return ONLY valid JSON with this exact structure:
 {
@@ -50,7 +75,8 @@ Return ONLY valid JSON with this exact structure:
           "title": string,
           "description": string,
           "estimatedCost": number,
-          "category": "food" | "attraction" | "nature" | "museum" | "nightlife" | "shopping" | "transport",
+          "category": "cafe" | "food" | "attraction" | "nature" | "museum" | "nightlife" | "shopping" | "transport",
+          "imageQuery": string,
           "reasoning": string
         }
       ],
@@ -61,11 +87,15 @@ Return ONLY valid JSON with this exact structure:
 }
 
 Rules:
-- Include specific restaurants, attractions, and neighborhoods.
-- Keep daily costs realistic for the ${style} travel style.
+- Include specific restaurants, attractions, and neighborhoods suitable for a group of ${travelers}.
+- All costs (estimatedCost, dailyTotal, budgetBreakdown, totalEstimatedCost) are for the ENTIRE GROUP, not per person.
+- Scale food and accommodation for ${travelers} people; attractions and transport should reflect group size where relevant.
+- Keep daily costs realistic for the ${style} travel style and group size.
 - Use lowercase for timeOfDay and category values exactly as listed.
+- For each activity, set imageQuery to a short 2-4 word search phrase for a photo.
+- Use category "cafe" for coffee shops and casual café stops; use "food" for restaurants and sit-down meals.
 - Include morning, afternoon, and evening activities for each day.
-- totalEstimatedCost should be close to but not exceed €${budget}.`;
+- totalEstimatedCost should be close to but not exceed the group budget of €${budget}.`;
 }
 
 export async function POST(req: Request) {
@@ -80,11 +110,43 @@ export async function POST(req: Request) {
       );
     }
 
-    const { destination, budget, days, style, interests } = parsed.data;
+    const { destination, budget, travelers, days, startDate, style, interests } =
+      parsed.data;
+
+    const today = todayString();
+    const latestStart = maxStartDate(days);
+
+    if (startDate < today || startDate > latestStart) {
+      return NextResponse.json(
+        {
+          error: `Trip must start between ${today} and ${latestStart} (weather forecast limit).`,
+        },
+        { status: 400 }
+      );
+    }
+
+    const weather = await fetchTripWeather(destination, startDate, days);
+
+    if (!weather) {
+      return NextResponse.json(
+        { error: "Could not fetch weather for this destination." },
+        { status: 404 }
+      );
+    }
+
     const model = getModel();
 
     const result = await model.generateContent(
-      buildPrompt(destination, budget, days, style, interests)
+      buildPrompt(
+        destination,
+        budget,
+        travelers,
+        days,
+        startDate,
+        style,
+        interests,
+        weather
+      )
     );
 
     const raw = result.response.text();
@@ -98,7 +160,11 @@ export async function POST(req: Request) {
       );
     }
 
-    return NextResponse.json(itinerary.data);
+    return NextResponse.json({
+      ...itinerary.data,
+      startDate,
+      weather,
+    });
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Something went wrong.";
@@ -113,8 +179,7 @@ export async function POST(req: Request) {
     if (message.includes("429")) {
       return NextResponse.json(
         {
-          error:
-            "Gemini rate limit reached. Wait a moment and try again.",
+          error: "Gemini rate limit reached. Wait a moment and try again.",
         },
         { status: 429 }
       );

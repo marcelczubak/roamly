@@ -1,12 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Globe2, Sparkles, Timer, Wallet } from "lucide-react";
+import { Globe2, MapPin, Sparkles, Timer, Wallet } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { CityBackdrop } from "@/components/city-backdrop";
 import { GenerationLoader } from "@/components/generation-loader";
 import { ItineraryResults } from "@/components/itinerary-results";
 import { TripForm } from "@/components/trip-form";
-import type { Itinerary, TripRequest } from "@/lib/schemas";
+import { useCurrentCity } from "@/hooks/use-current-city";
+import { FEATURE_ACCENTS } from "@/lib/accent-colors";
+import type { GenerateResponse, TripRequest } from "@/lib/schemas";
 
 type View = "form" | "loading" | "results";
 
@@ -30,14 +34,41 @@ const FEATURES = [
 
 export function RoamlyHome() {
   const [view, setView] = useState<View>("form");
-  const [itinerary, setItinerary] = useState<Itinerary | null>(null);
+  const [itinerary, setItinerary] = useState<GenerateResponse | null>(null);
   const [trip, setTrip] = useState<TripRequest | null>(null);
   const [error, setError] = useState("");
+  const [prefillDestination, setPrefillDestination] = useState<string | null>(
+    null
+  );
+  const [backdropCity, setBackdropCity] = useState<string | null>(null);
+  const currentCity = useCurrentCity();
+
+  useEffect(() => {
+    if (
+      currentCity.status === "ready" &&
+      !backdropCity &&
+      view === "form"
+    ) {
+      setBackdropCity(currentCity.city);
+    }
+  }, [currentCity, backdropCity, view]);
+
+  function handleDestinationChange(destination: string) {
+    const trimmed = destination.trim();
+    if (trimmed) {
+      setBackdropCity(trimmed);
+    } else if (currentCity.status === "ready") {
+      setBackdropCity(currentCity.city);
+    } else {
+      setBackdropCity(null);
+    }
+  }
 
   async function handleSubmit(data: TripRequest) {
     setError("");
     setView("loading");
     setTrip(data);
+    setBackdropCity(data.destination);
 
     try {
       const response = await fetch("/api/generate", {
@@ -71,30 +102,52 @@ export function RoamlyHome() {
     setError("");
   }
 
-  return (
-    <div className="relative min-h-screen overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,oklch(0.92_0.06_220)_0%,transparent_55%)]" />
-      <div className="pointer-events-none absolute -right-24 top-32 size-72 rounded-full bg-primary/10 blur-3xl" />
-      <div className="pointer-events-none absolute -left-24 bottom-0 size-72 rounded-full bg-sky-200/40 blur-3xl" />
+  function planCurrentCity() {
+    if (currentCity.status !== "ready") return;
 
-      <header className="relative z-10 border-b border-white/50 bg-white/50 backdrop-blur-md">
+    setPrefillDestination(currentCity.city);
+    setBackdropCity(currentCity.city);
+    document
+      .getElementById("trip-form")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const displayBackdropCity =
+    view === "results" && trip
+      ? trip.destination
+      : backdropCity;
+
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-stone-50">
+      <CityBackdrop
+        city={displayBackdropCity}
+        variant={view === "form" ? "hero" : "content"}
+      />
+
+      <header className="relative z-10 border-b border-stone-200/60 bg-white/70 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-6">
           <div className="flex items-center gap-2.5">
-            <div className="flex size-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <div className="flex size-9 items-center justify-center rounded-xl bg-stone-800 text-white shadow-sm">
               <Globe2 className="size-5" />
             </div>
             <div>
-              <p className="font-heading text-lg font-semibold leading-none">
+              <p className="font-heading text-lg font-semibold leading-none text-stone-900">
                 Roamly
               </p>
-              <p className="text-[11px] text-muted-foreground">
-                AI travel planner
-              </p>
+              <p className="text-[11px] text-stone-500">AI travel planner</p>
             </div>
           </div>
-          <p className="hidden text-sm text-muted-foreground sm:block">
-            Personalized itineraries in seconds
-          </p>
+          {currentCity.status === "ready" ? (
+            <div className="hidden items-center gap-1.5 text-sm text-stone-500 sm:flex">
+              <MapPin className="size-3.5" />
+              {currentCity.city}
+              {currentCity.country ? `, ${currentCity.country}` : ""}
+            </div>
+          ) : (
+            <p className="hidden text-sm text-stone-500 sm:block">
+              Personalized itineraries in seconds
+            </p>
+          )}
         </div>
       </header>
 
@@ -120,14 +173,45 @@ export function RoamlyHome() {
             >
               <section className="space-y-8 pt-4">
                 <div className="space-y-4">
-                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-xs font-medium text-primary">
+                  {currentCity.status === "loading" ? (
+                    <div className="h-8 w-48 animate-pulse rounded-full bg-stone-200/80" />
+                  ) : currentCity.status === "ready" ? (
+                    <div className="flex flex-col gap-3 rounded-xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-2.5">
+                        <div className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-stone-100">
+                          <MapPin className="size-4 text-stone-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-stone-900">
+                            You&apos;re in {currentCity.city}
+                            {currentCity.country
+                              ? `, ${currentCity.country}`
+                              : ""}
+                          </p>
+                          <p className="text-xs text-stone-500">
+                            Generate an itinerary for where you are now
+                          </p>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={planCurrentCity}
+                        className="shrink-0 border-stone-300 bg-stone-800 text-white hover:bg-stone-700 hover:text-white"
+                      >
+                        Plan a trip here
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/60 bg-white/70 px-3 py-1 text-xs font-medium text-stone-500 backdrop-blur-sm">
                     <Sparkles className="size-3.5" />
                     AI-powered travel planning
                   </div>
-                  <h1 className="max-w-xl font-heading text-4xl font-semibold tracking-tight text-foreground md:text-5xl md:leading-[1.1]">
+                  <h1 className="max-w-xl font-heading text-4xl font-semibold tracking-tight text-stone-900 md:text-5xl md:leading-[1.1]">
                     Your next adventure, planned in seconds
                   </h1>
-                  <p className="max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg">
+                  <p className="max-w-lg text-base leading-relaxed text-stone-600 md:text-lg">
                     Roamly turns your destination, budget, and interests into a
                     beautiful day-by-day itinerary — with restaurants,
                     attractions, costs, and AI reasoning for every pick.
@@ -135,33 +219,41 @@ export function RoamlyHome() {
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-3">
-                  {FEATURES.map((feature) => (
+                  {FEATURES.map((feature, index) => (
                     <div
                       key={feature.title}
-                      className="rounded-2xl border border-white/70 bg-white/60 p-4 backdrop-blur-sm"
+                      className={`rounded-2xl border border-white/60 bg-white/70 p-4 shadow-sm backdrop-blur-sm ${FEATURE_ACCENTS[index].card}`}
                     >
-                      <feature.icon className="mb-3 size-5 text-primary" />
-                      <h3 className="text-sm font-medium">{feature.title}</h3>
-                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                      <div
+                        className={`mb-3 flex size-8 items-center justify-center rounded-lg ${FEATURE_ACCENTS[index].icon}`}
+                      >
+                        <feature.icon className="size-4" />
+                      </div>
+                      <h3 className="text-sm font-medium text-stone-900">
+                        {feature.title}
+                      </h3>
+                      <p className="mt-1 text-xs leading-relaxed text-stone-500">
                         {feature.description}
                       </p>
                     </div>
                   ))}
                 </div>
-
-                <p className="text-sm text-muted-foreground">
-                  Demo: plan a 5-day trip to Tokyo with a €1,500 budget in
-                  under 15 seconds.
-                </p>
               </section>
 
               <section>
                 {error ? (
-                  <div className="mb-4 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                  <div className="mb-4 rounded-lg border border-red-200 bg-red-50/90 px-4 py-3 text-sm text-red-700 backdrop-blur-sm">
                     {error}
                   </div>
                 ) : null}
-                <TripForm onSubmit={handleSubmit} />
+                <TripForm
+                  onSubmit={handleSubmit}
+                  onDestinationChange={handleDestinationChange}
+                  currentCity={
+                    currentCity.status === "ready" ? currentCity.city : null
+                  }
+                  prefillDestination={prefillDestination}
+                />
               </section>
             </motion.div>
           )}
