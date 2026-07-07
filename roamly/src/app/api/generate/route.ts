@@ -19,28 +19,6 @@ function getOllamaModel(): string {
   return process.env.OLLAMA_MODEL ?? "qwen2.5:7b";
 }
 
-function getModel() {
-  const apiKey = process.env.GEMINI_API_KEY;
-
-  if (!apiKey) {
-    return null;
-  }
-
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  return genAI.getGenerativeModel({
-    model: "gemini-2.5-flash",
-    tools: [{ googleSearch: {} } as never],
-  });
-}
-
-function parseJsonResponse(raw: string) {
-  const trimmed = raw.trim();
-  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const jsonText = fenced ? fenced[1].trim() : trimmed;
-  return JSON.parse(jsonText);
-}
-
 function buildPrompt(
   destination: string,
   budget: number,
@@ -240,10 +218,6 @@ function normalizeItinerary(parsed: Record<string, unknown>, destination: string
 
 async function generateWithGemini(prompt: string, destination: string) {
   const model = getModel();
-  if (!model) {
-    throw new Error("Missing GEMINI_API_KEY");
-  }
-
   const result = await model.generateContent(prompt);
   const raw = result.response.text();
   return normalizeItinerary(parseJsonResponse(raw), destination);
