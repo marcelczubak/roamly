@@ -36,7 +36,7 @@ import {
   deleteActivityFromItinerary,
   replaceDayInItinerary,
 } from "@/lib/itinerary-utils";
-import { motionPage } from "@/lib/motion";
+import { motionPage, motionTransition } from "@/lib/motion";
 import { getCategoryIconItem } from "@/lib/icon-themes";
 import { cn } from "@/lib/utils";
 import type {
@@ -150,14 +150,36 @@ function ActivityCard({
   onDelete: () => void;
 }) {
   const [showReasoning, setShowReasoning] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const category = getCategoryIconItem(activity.category);
   const imageQuery =
     activity.imageQuery || activity.photoQuery || `${destination} ${activity.title}`;
 
   return (
-    <div
+    <motion.div
+      onHoverStart={() => setHovered(true)}
+      onHoverEnd={() => setHovered(false)}
+      initial={false}
+      animate={
+        hovered
+          ? { scale: [1.008, 1.014, 1.008], y: -2 }
+          : { scale: 1, y: 0 }
+      }
+      transition={
+        hovered
+          ? {
+              scale: {
+                duration: 2.8,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+              y: { duration: 0.4, ease: [0.4, 0, 0.2, 1] },
+            }
+          : motionTransition.interactive
+      }
       className={cn(
-        "relative rounded-xl border p-4 pb-11",
+        "relative rounded-xl border p-4 pb-11 shadow-sm transition-shadow",
+        hovered && "shadow-md",
         CATEGORY_ACCENTS[activity.category].card
       )}
     >
@@ -180,7 +202,7 @@ function ActivityCard({
                   {TIME_LABELS[activity.timeOfDay]}
                 </span>
               </div>
-              <h4 className="font-medium text-stone-900">{activity.title}</h4>
+              <h4 className="font-semibold text-stone-900">{activity.title}</h4>
               <p className="text-sm font-medium text-stone-700">
                 {activity.venueName}
               </p>
@@ -244,7 +266,7 @@ function ActivityCard({
       >
         <Trash2 className="size-4" />
       </Button>
-    </div>
+    </motion.div>
   );
 }
 
@@ -505,9 +527,14 @@ export function ItineraryResults({
           Plan another trip
         </Button>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-stone-500">
-          <span className="flex items-center gap-2">
-            <MapPin className="size-4 text-stone-500" />
-            {trip.destination} · {trip.days} days · {trip.startDate} · {trip.style}
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+            <MapPin className="size-4 shrink-0 text-stone-500" />
+            <span className="text-base font-semibold text-stone-900">
+              {trip.destination}
+            </span>
+            <span>
+              {trip.days} days · {trip.startDate} · {trip.style}
+            </span>
           </span>
           <span className="flex items-center gap-1.5">
             <Users className="size-4 text-stone-500" />
@@ -637,7 +664,7 @@ export function ItineraryResults({
           </p>
         </div>
 
-        <div className="lg:grid lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[15rem_minmax(0,1fr)]">
+        <div className="lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-8 xl:grid-cols-[18rem_minmax(0,1fr)]">
           <DayNavSidebar
             days={itineraryState.days}
             weatherByDay={weatherByDay}

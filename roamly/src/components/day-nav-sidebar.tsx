@@ -207,16 +207,16 @@ function DayNavButton({
           </p>
           <p
             className={cn(
-              "mt-0.5 line-clamp-2 text-sm font-medium leading-snug",
+              "mt-0.5 text-sm font-medium leading-snug",
               isActive ? "text-white" : "text-stone-900"
             )}
           >
             {day.theme}
           </p>
           {isActive && weather ? (
-            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-stone-300">
-              <WeatherIcon code={weather.weatherCode} className="size-3.5 shrink-0" />
-              <span>
+            <div className="mt-1.5 flex items-start gap-1.5 text-xs leading-relaxed text-stone-300">
+              <WeatherIcon code={weather.weatherCode} className="mt-0.5 size-3.5 shrink-0" />
+              <span className="min-w-0 break-words">
                 {weather.tempMax}° / {weather.tempMin}° · {weather.description}
               </span>
             </div>
@@ -240,7 +240,7 @@ export function DayNavSidebar({
   const activeIndex = days.findIndex((day) => day.day === activeDay);
 
   return (
-    <div className="min-w-0 lg:w-56 lg:shrink-0">
+    <div className="min-w-0 lg:w-64 lg:shrink-0 xl:w-72">
       {/* Mobile: sticky within day section only — scrolls away above overview */}
       <div className="sticky top-4 z-20 mb-4 lg:hidden">
         <div className="rounded-2xl border border-stone-200/80 bg-white/95 p-2 shadow-sm backdrop-blur-md">
