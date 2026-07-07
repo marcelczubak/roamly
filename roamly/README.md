@@ -10,9 +10,8 @@ Built for a hackathon to show how AI can replace hours of manual trip research w
 
 ## Demo video
 
-[![Roamly demo video](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)](YOUR_VIDEO_URL_HERE)
+[![Roamly demo video](https://img.shields.io/badge/Watch-Demo%20Video-red?style=for-the-badge&logo=youtube)]([YOUR_VIDEO_URL_HERE](https://github.com/user-attachments/assets/b279d089-540a-46b9-9871-cc71bd986b56))
 
-> **Add your video link above.** Replace `YOUR_VIDEO_URL_HERE` with your YouTube, Loom, or Google Drive URL.
 
 **What the demo covers:**
 - Planning a multi-day trip (e.g. Dublin or Cork)
