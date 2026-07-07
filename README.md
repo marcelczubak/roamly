@@ -17,7 +17,7 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Demo video
 
-[Watch the demo](YOUR_VIDEO_URL_HERE)
+[Watch the demo](https://github.com/user-attachments/assets/b279d089-540a-46b9-9871-cc71bd986b56)
 
 ## Repository
 
